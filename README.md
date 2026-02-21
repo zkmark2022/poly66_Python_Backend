@@ -35,8 +35,14 @@ DEV_MVP/
 │   │   ├── 03_撮合引擎与清算流程设计.md v1.2  ← 核心算法伪代码
 │   │   └── 04_WAL预写日志与故障恢复设计.md v1.1 ← 熔断 + 恢复
 │   ├── Implementation/
-│   │   ├── 2026-02-20-scaffolding-design.md  ← 脚手架设计文档
-│   │   └── 2026-02-20-scaffolding-plan.md    ← 脚手架实施计划（16个任务，已完成）
+│   │   ├── 2026-02-20-scaffolding-design.md  ← 脚手架设计文档（已完成）
+│   │   ├── 2026-02-20-scaffolding-plan.md    ← 脚手架实施计划（已完成）
+│   │   ├── 2026-02-20-pm-gateway-design.md   ← pm_gateway 设计文档（已完成）
+│   │   ├── 2026-02-20-pm-gateway-plan.md     ← pm_gateway 实施计划（已完成）
+│   │   ├── 2026-02-20-pm-account-design.md   ← pm_account 设计文档（已完成）
+│   │   ├── 2026-02-20-pm-account-plan.md     ← pm_account 实施计划（已完成）
+│   │   ├── 2026-02-20-pm-market-design.md    ← pm_market 设计文档（已完成）
+│   │   └── 2026-02-20-pm-market-plan.md      ← pm_market 实施计划（已完成）
 │   ├── archive/                       ← v1~v3 历史版本（仅供参考）
 │   └── 参考资料_单账本撮合引擎设计方案_v1.md
 │
@@ -51,9 +57,21 @@ DEV_MVP/
 │   │   ├── datetime_utils.py          ← UTC 时间工具
 │   │   ├── database.py                ← SQLAlchemy async engine + session factory
 │   │   └── redis_client.py            ← Redis 连接（仅限流/会话，余额走 PG）
-│   ├── pm_gateway/                    ← 认证模块（待实现）
-│   ├── pm_account/                    ← 账户/持仓模块（待实现）
-│   ├── pm_market/                     ← 话题模块（待实现）
+│   ├── pm_gateway/                    ← 认证网关模块（Module 2，已完成）
+│   │   ├── auth/                      ← jwt_handler / password / dependencies
+│   │   ├── user/                      ← db_models / schemas / service
+│   │   ├── middleware/                ← rate_limit / request_log
+│   │   └── api/router.py              ← POST /auth/register|login|refresh
+│   ├── pm_account/                    ← 账户/持仓模块（Module 3，已完成）
+│   │   ├── domain/                    ← models / enums / events / repository / cache
+│   │   ├── infrastructure/            ← db_models / persistence
+│   │   ├── application/               ← schemas / service
+│   │   └── api/router.py              ← GET balance|ledger, POST deposit|withdraw
+│   ├── pm_market/                     ← 话题模块（Module 4，已完成）
+│   │   ├── domain/                    ← models / repository
+│   │   ├── infrastructure/            ← db_models / persistence
+│   │   ├── application/               ← schemas / service
+│   │   └── api/router.py              ← GET /markets, /markets/{id}, /markets/{id}/orderbook
 │   ├── pm_order/                      ← 订单模块（待实现）
 │   ├── pm_risk/                       ← 风控模块（待实现）
 │   ├── pm_matching/                   ← 撮合引擎（待实现，最复杂）
@@ -79,8 +97,9 @@ DEV_MVP/
 │
 ├── tests/
 │   ├── conftest.py                    ← AsyncClient fixture
-│   ├── unit/                          ← 55 个单元测试（全通过）
-│   └── integration/  e2e/             ← 待填充
+│   ├── unit/                          ← 单元测试（共 182 个，全通过）
+│   ├── integration/                   ← 集成测试（auth / account / market flow）
+│   └── e2e/                           ← 待填充（Module 5+ 完成后）
 │
 ├── docker-compose.yml                 ← postgres:16-alpine + redis:7-alpine
 ├── Dockerfile                         ← 两阶段构建（uv）
