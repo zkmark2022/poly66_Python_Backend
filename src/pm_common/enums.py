@@ -3,10 +3,10 @@
 Ref: Planning/Detail_Design/01_全局约定与数据库设计.md §4.1
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class MarketStatus(str, Enum):
+class MarketStatus(StrEnum):
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
     SUSPENDED = "SUSPENDED"
@@ -16,49 +16,52 @@ class MarketStatus(str, Enum):
     VOIDED = "VOIDED"
 
 
-class BookType(str, Enum):
+class BookType(StrEnum):
     """订单簿身份: 标识订单在单一 YES 订单簿中的来源和角色"""
+
     NATIVE_BUY = "NATIVE_BUY"
     NATIVE_SELL = "NATIVE_SELL"
     SYNTHETIC_BUY = "SYNTHETIC_BUY"
     SYNTHETIC_SELL = "SYNTHETIC_SELL"
 
 
-class TradeScenario(str, Enum):
+class TradeScenario(StrEnum):
     """撮合场景: 由 buy/sell 的 BookType 组合决定"""
+
     MINT = "MINT"
     TRANSFER_YES = "TRANSFER_YES"
     TRANSFER_NO = "TRANSFER_NO"
     BURN = "BURN"
 
 
-class FrozenAssetType(str, Enum):
+class FrozenAssetType(StrEnum):
     """冻结资产类型: 撤单时据此解冻到对应账户"""
+
     FUNDS = "FUNDS"
     YES_SHARES = "YES_SHARES"
     NO_SHARES = "NO_SHARES"
 
 
-class OriginalSide(str, Enum):
+class OriginalSide(StrEnum):
     YES = "YES"
     NO = "NO"
 
 
-class OrderDirection(str, Enum):
+class OrderDirection(StrEnum):
     BUY = "BUY"
     SELL = "SELL"
 
 
-class PriceType(str, Enum):
+class PriceType(StrEnum):
     LIMIT = "LIMIT"
 
 
-class TimeInForce(str, Enum):
+class TimeInForce(StrEnum):
     GTC = "GTC"
     IOC = "IOC"
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     NEW = "NEW"
     OPEN = "OPEN"
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
@@ -67,7 +70,7 @@ class OrderStatus(str, Enum):
     REJECTED = "REJECTED"
 
 
-class LedgerEntryType(str, Enum):
+class LedgerEntryType(StrEnum):
     # Deposit/Withdraw
     DEPOSIT = "DEPOSIT"
     WITHDRAW = "WITHDRAW"
@@ -94,7 +97,7 @@ class LedgerEntryType(str, Enum):
     SETTLEMENT_VOID = "SETTLEMENT_VOID"
 
 
-class ResolutionResult(str, Enum):
+class ResolutionResult(StrEnum):
     YES = "YES"
     NO = "NO"
     VOID = "VOID"

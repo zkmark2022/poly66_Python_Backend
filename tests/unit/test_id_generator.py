@@ -1,6 +1,6 @@
 """Tests for pm_common.id_generator and pm_common.datetime_utils."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.pm_common.datetime_utils import utc_now
 from src.pm_common.id_generator import SnowflakeIdGenerator
@@ -34,4 +34,4 @@ class TestUtcNow:
 
     def test_is_utc(self) -> None:
         now = utc_now()
-        assert now.tzinfo == timezone.utc
+        assert now.tzinfo == UTC

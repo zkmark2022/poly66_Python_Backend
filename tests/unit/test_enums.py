@@ -68,9 +68,18 @@ class TestLedgerEntryType:
 
     def test_user_side_types(self) -> None:
         user_types = {
-            "DEPOSIT", "WITHDRAW", "ORDER_FREEZE", "ORDER_UNFREEZE",
-            "MINT_COST", "BURN_REVENUE", "TRANSFER_PAYMENT", "TRANSFER_RECEIPT",
-            "NETTING", "FEE", "SETTLEMENT_PAYOUT", "SETTLEMENT_VOID",
+            "DEPOSIT",
+            "WITHDRAW",
+            "ORDER_FREEZE",
+            "ORDER_UNFREEZE",
+            "MINT_COST",
+            "BURN_REVENUE",
+            "TRANSFER_PAYMENT",
+            "TRANSFER_RECEIPT",
+            "NETTING",
+            "FEE",
+            "SETTLEMENT_PAYOUT",
+            "SETTLEMENT_VOID",
         }
         all_values = {le.value for le in LedgerEntryType}
         assert user_types.issubset(all_values)

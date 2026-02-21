@@ -27,6 +27,7 @@ class AppError(Exception):
 
 # --- 1xxx: Auth/User ---
 
+
 class UsernameExistsError(AppError):
     def __init__(self) -> None:
         super().__init__(1001, "Username already exists", 409)
@@ -54,6 +55,7 @@ class InvalidRefreshTokenError(AppError):
 
 # --- 2xxx: Account ---
 
+
 class InsufficientBalanceError(AppError):
     def __init__(self, required: int, available: int) -> None:
         super().__init__(
@@ -70,6 +72,7 @@ class AccountNotFoundError(AppError):
 
 # --- 3xxx: Market ---
 
+
 class MarketNotFoundError(AppError):
     def __init__(self, market_id: str) -> None:
         super().__init__(3001, f"Market not found: {market_id}", 404)
@@ -81,6 +84,7 @@ class MarketNotActiveError(AppError):
 
 
 # --- 4xxx: Order ---
+
 
 class PriceOutOfRangeError(AppError):
     def __init__(self, price: int) -> None:
@@ -114,12 +118,14 @@ class OrderNotCancellableError(AppError):
 
 # --- 5xxx: Position ---
 
+
 class InsufficientPositionError(AppError):
     def __init__(self, detail: str) -> None:
         super().__init__(5001, f"Insufficient position: {detail}", 422)
 
 
 # --- 9xxx: System ---
+
 
 class RateLimitError(AppError):
     def __init__(self) -> None:

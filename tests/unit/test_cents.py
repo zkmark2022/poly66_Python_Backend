@@ -17,15 +17,15 @@ class TestValidatePrice:
         validate_price(99)  # OK
 
     def test_zero_raises(self) -> None:
-        with pytest.raises(ValueError, match="1.*99"):
+        with pytest.raises(ValueError, match=r"1.*99"):
             validate_price(0)
 
     def test_hundred_raises(self) -> None:
-        with pytest.raises(ValueError, match="1.*99"):
+        with pytest.raises(ValueError, match=r"1.*99"):
             validate_price(100)
 
     def test_negative_raises(self) -> None:
-        with pytest.raises(ValueError, match="1.*99"):
+        with pytest.raises(ValueError, match=r"1.*99"):
             validate_price(-5)
 
 

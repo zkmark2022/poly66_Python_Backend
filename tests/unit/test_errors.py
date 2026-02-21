@@ -8,7 +8,7 @@ from src.pm_common.errors import (
     OrderNotFoundError,
     SelfTradeError,
 )
-from src.pm_common.response import ApiResponse, error_response, success_response
+from src.pm_common.response import error_response, success_response
 
 
 class TestAppError:

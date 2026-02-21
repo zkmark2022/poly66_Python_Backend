@@ -13,7 +13,7 @@ Ref: Planning/Detail_Design/02_API接口契约.md §1.3
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -23,7 +23,7 @@ class ApiResponse(BaseModel):
     code: int = 0
     message: str = "success"
     data: Any = None
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     request_id: str = Field(default_factory=lambda: f"req_{uuid.uuid4().hex[:12]}")
 
 
