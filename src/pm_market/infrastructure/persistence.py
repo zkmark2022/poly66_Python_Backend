@@ -129,12 +129,18 @@ class MarketRepository:
         cursor_id: str | None,
         limit: int,
     ) -> list[Market]:
+        # asyncpg requires a real datetime object for TIMESTAMPTZ parameters,
+        # not an ISO string.  Parse the cursor timestamp here.
+        cursor_ts_dt: datetime | None = None
+        if cursor_ts is not None:
+            cursor_ts_dt = datetime.fromisoformat(cursor_ts)
+
         result = await db.execute(
             _LIST_MARKETS_SQL,
             {
                 "status": status,
                 "category": category,
-                "cursor_ts": cursor_ts,
+                "cursor_ts": cursor_ts_dt,
                 "cursor_id": cursor_id,
                 "limit": limit,
             },
