@@ -12,6 +12,7 @@ and immediate revocation on security incidents.
 """
 
 from datetime import UTC, datetime, timedelta
+from typing import Any, NoReturn
 
 from jose import JWTError, jwt
 
@@ -52,7 +53,7 @@ def create_refresh_token(user_id: str) -> str:
     return str(jwt.encode(payload, settings.JWT_SECRET, algorithm=_ALGORITHM))
 
 
-def decode_token(token: str, expected_type: str) -> dict[str, str]:
+def decode_token(token: str, expected_type: str) -> dict[str, Any]:
     """Decode and validate a JWT token.
 
     Args:
@@ -67,7 +68,7 @@ def decode_token(token: str, expected_type: str) -> dict[str, str]:
         InvalidCredentialsError: Token invalid/expired and expected_type="access".
         InvalidRefreshTokenError: Token invalid/expired and expected_type="refresh".
     """
-    payload: dict[str, str] = {}
+    payload: dict[str, Any] = {}
     try:
         payload = jwt.decode(
             token,
@@ -83,7 +84,7 @@ def decode_token(token: str, expected_type: str) -> dict[str, str]:
     return payload
 
 
-def _raise_auth_error(expected_type: str) -> None:
+def _raise_auth_error(expected_type: str) -> NoReturn:
     """Raise the appropriate error based on which token type was expected."""
     if expected_type == "access":
         raise InvalidCredentialsError()
