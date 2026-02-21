@@ -25,6 +25,7 @@ from src.pm_common.response import error_response
 from src.pm_gateway.api.router import router as auth_router
 from src.pm_gateway.middleware.request_log import RequestLogMiddleware
 from src.pm_market.api.router import router as market_router
+from src.pm_order.api.router import router as order_router
 
 
 @asynccontextmanager
@@ -62,6 +63,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(account_router, prefix="/api/v1")
 app.include_router(market_router, prefix="/api/v1")
+app.include_router(order_router, prefix="/api/v1")
 
 
 @app.get("/health")
