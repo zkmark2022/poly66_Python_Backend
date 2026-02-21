@@ -526,8 +526,7 @@ class TestMintScenario:
         trade = trades[0]
         assert trade["quantity"] == 5
         assert trade["price"] == 65
-        # MINT: NATIVE_BUY vs SYNTHETIC_SELL
-        assert trade["scenario"] == "NATIVE_BUY_vs_SYNTHETIC_SELL"
+        assert trade["scenario"] == "MINT"
 
         # User A's order must now appear as FILLED via GET /orders/{id}
         get_a = await client.get(f"/api/v1/orders/{order_a['id']}", headers=headers_a)

@@ -6,6 +6,7 @@ from src.pm_common.errors import AppError, DuplicateOrderError
 from src.pm_common.id_generator import generate_id
 from src.pm_matching.application.service import get_matching_engine
 from src.pm_matching.domain.models import TradeResult
+from src.pm_matching.engine.scenario import determine_scenario
 from src.pm_order.application.schemas import (
     CancelOrderResponse,
     OrderListResponse,
@@ -37,7 +38,7 @@ def _order_to_response(order: Order) -> OrderResponse:
 
 
 def _trade_to_response(trade: TradeResult) -> TradeResponse:
-    scenario = f"{trade.buy_book_type}_vs_{trade.sell_book_type}"
+    scenario = determine_scenario(trade.buy_book_type, trade.sell_book_type)
     return TradeResponse(
         buy_order_id=trade.buy_order_id,
         sell_order_id=trade.sell_order_id,
