@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from src.pm_clearing.domain.invariants import verify_invariants_after_trade
 

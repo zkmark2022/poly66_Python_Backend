@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from src.pm_clearing.domain.netting import execute_netting_if_needed
