@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from src.pm_account.domain.enums import LedgerEntryType
-from src.pm_account.domain.models import Account, Position
+from src.pm_account.domain.models import Account, LedgerEntry, Position
 
 
 class TestAccount:
@@ -57,6 +57,22 @@ class TestPosition:
             no_pending_sell=20,
         )
         assert pos.available_no == 30
+
+
+class TestLedgerEntry:
+    def test_optional_fields_default_to_none(self) -> None:
+        from src.pm_common.enums import LedgerEntryType
+        entry = LedgerEntry(
+            id=1,
+            user_id="user-1",
+            entry_type=LedgerEntryType.DEPOSIT,
+            amount=10000,
+            balance_after=110000,
+        )
+        assert entry.reference_type is None
+        assert entry.reference_id is None
+        assert entry.description is None
+        assert entry.created_at is None
 
 
 class TestLedgerEntryType:
