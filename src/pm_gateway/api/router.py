@@ -7,13 +7,11 @@ Ref: Planning/Detail_Design/02_API接口契约.md §2.1-2.3
 """
 
 from fastapi import APIRouter, Depends, Request, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
 from src.pm_common.database import get_db_session
 from src.pm_common.response import ApiResponse, success_response
-from src.pm_gateway.user.db_models import UserModel
 from src.pm_gateway.user.schemas import (
     LoginRequest,
     LoginResponse,
@@ -71,33 +69,18 @@ async def login(
     body: LoginRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> ApiResponse:
-    access_token, refresh_token = await _service.login(body.username, body.password, db)
-
-    # Fetch user info for response
-    result = await db.execute(
-        select(UserModel).where(UserModel.username == body.username)
-    )
-    user = result.scalar_one_or_none()
-
-    if user is not None:
-        user_info = UserInfo(
-            user_id=str(user.id),
-            username=body.username,
-            email=user.email,
-        )
-    else:
-        user_info = UserInfo(
-            user_id="",
-            username=body.username,
-            email="",
-        )
+    user, access_token, refresh_token = await _service.login(body.username, body.password, db)
 
     data = LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="Bearer",
         expires_in=settings.JWT_EXPIRE_MINUTES * 60,
-        user=user_info,
+        user=UserInfo(
+            user_id=str(user.id),
+            username=user.username,
+            email=user.email,
+        ),
     )
     resp = success_response(data.model_dump())
     resp.request_id = _get_request_id(request)

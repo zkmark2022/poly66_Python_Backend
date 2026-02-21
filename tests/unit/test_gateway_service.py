@@ -107,26 +107,21 @@ class TestLogin:
         mock_result.scalar_one_or_none.return_value = user
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        with patch(
-            "src.pm_gateway.user.service.verify_password", return_value=True
-        ):
-            access, refresh = await service.login("alice", "Pass1word", mock_db)
+        with patch("src.pm_gateway.user.service.verify_password", return_value=True):
+            returned_user, access, refresh = await service.login("alice", "Pass1word", mock_db)
 
+        assert returned_user.username == "alice"
         assert len(access) > 20
         assert len(refresh) > 20
         assert access != refresh
 
 
 class TestRefresh:
-    async def test_invalid_refresh_token_raises_error(
-        self, service: UserService
-    ) -> None:
+    async def test_invalid_refresh_token_raises_error(self, service: UserService) -> None:
         with pytest.raises(InvalidRefreshTokenError):
             await service.refresh("not.a.real.token")
 
-    async def test_access_token_used_as_refresh_raises_error(
-        self, service: UserService
-    ) -> None:
+    async def test_access_token_used_as_refresh_raises_error(self, service: UserService) -> None:
         from src.pm_gateway.auth.jwt_handler import create_access_token
 
         access = create_access_token("user-123")

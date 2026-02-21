@@ -38,16 +38,12 @@ class UserService:
         The caller must wrap this in `async with db.begin()`.
         """
         # Check username uniqueness (DB UNIQUE constraint is the final guard)
-        result = await db.execute(
-            select(UserModel).where(UserModel.username == username)
-        )
+        result = await db.execute(select(UserModel).where(UserModel.username == username))
         if result.scalar_one_or_none() is not None:
             raise UsernameExistsError()
 
         # Check email uniqueness
-        result = await db.execute(
-            select(UserModel).where(UserModel.email == email)
-        )
+        result = await db.execute(select(UserModel).where(UserModel.email == email))
         if result.scalar_one_or_none() is not None:
             raise EmailExistsError()
 
@@ -78,15 +74,13 @@ class UserService:
         username: str,
         password: str,
         db: AsyncSession,
-    ) -> tuple[str, str]:
-        """Authenticate user and return (access_token, refresh_token).
+    ) -> tuple[UserModel, str, str]:
+        """Authenticate user and return (user, access_token, refresh_token).
 
         Note: "User not found" and "Wrong password" both raise InvalidCredentialsError
         intentionally — prevents username enumeration attacks.
         """
-        result = await db.execute(
-            select(UserModel).where(UserModel.username == username)
-        )
+        result = await db.execute(select(UserModel).where(UserModel.username == username))
         user = result.scalar_one_or_none()
 
         if user is None or not verify_password(password, user.password_hash):
@@ -96,6 +90,7 @@ class UserService:
             raise AccountDisabledError()
 
         return (
+            user,
             create_access_token(str(user.id)),
             create_refresh_token(str(user.id)),
         )

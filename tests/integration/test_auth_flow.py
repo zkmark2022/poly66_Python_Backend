@@ -159,6 +159,7 @@ class TestProtectedRoute:
         )
         assert resp.status_code == 200
 
+    @pytest.mark.skip(reason="no protected endpoint exists yet")
     async def test_access_without_token_fails(self, client: AsyncClient) -> None:
-        """Placeholder — will be meaningful once a protected endpoint exists."""
+        """Meaningful once a protected endpoint (e.g. GET /api/v1/account/balance) exists."""
         pass
