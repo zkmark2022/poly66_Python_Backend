@@ -21,3 +21,10 @@ def get_fee_trade_value(
 def calc_fee(trade_value: int, fee_bps: int) -> int:
     """Ceiling division fee: (trade_value x fee_bps + 9999) // 10000."""
     return (trade_value * fee_bps + 9999) // 10000
+
+
+def calc_released_cost(cost_sum: int, volume: int, qty: int) -> int:
+    """Proportional cost release. Full close avoids dust."""
+    if qty >= volume:
+        return cost_sum
+    return cost_sum * qty // volume
