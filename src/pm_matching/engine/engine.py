@@ -27,7 +27,9 @@ from src.pm_risk.rules.price_range import check_price_range
 logger = logging.getLogger(__name__)
 
 _GET_MARKET_SQL = text("""
-    SELECT id, status, reserve_balance, pnl_pool, total_yes_shares, total_no_shares
+    SELECT id, status, reserve_balance, pnl_pool,
+           total_yes_shares, total_no_shares,
+           taker_fee_bps
     FROM markets WHERE id = :market_id FOR UPDATE
 """)
 
@@ -52,6 +54,7 @@ class MarketState:
         self.pnl_pool: int = row.pnl_pool
         self.total_yes_shares: int = row.total_yes_shares
         self.total_no_shares: int = row.total_no_shares
+        self.taker_fee_bps: int = row.taker_fee_bps
 
 
 class MatchingEngine:
