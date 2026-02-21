@@ -25,6 +25,7 @@ class Order:
     # Control
     time_in_force: str = "GTC"
     status: str = "OPEN"
+    cancel_reason: str | None = None
     filled_quantity: int = 0
     remaining_quantity: int = field(init=False)
     created_at: datetime | None = None
