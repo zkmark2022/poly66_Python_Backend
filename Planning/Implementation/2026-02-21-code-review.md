@@ -16,7 +16,7 @@
 
 | 章节 | 模块 | 状态 | 主要问题数 |
 |------|------|------|-----------|
-| A | pm_risk (5个规则) | ✅ PASS | 0 |
+| A | pm_risk (5个规则) | ✅ FIXED | 1 medium fixed |
 | B | pm_matching (OrderBook + Algo + Scenario) | ✅ PASS | 1 minor |
 | C | pm_clearing Part 1 (fee + ledger + WAL + MINT + TRANSFER_YES) | ✅ FIXED | 1 critical fixed |
 | D | pm_clearing Part 2 (BURN + netting + invariants + settlement) | ✅ PASS | 0 |
@@ -52,17 +52,19 @@
 
 **检查项**：
 - [x] 价格范围：1-99 是否正确 — `check_price_range`: `1 <= price <= 99` ✅
-- [x] 数量限制：MAX_ORDER_QUANTITY 是否与设计一致 — `MAX_ORDER_QUANTITY = 100_000` ✅
+- [x] 数量限制：MAX_ORDER_QUANTITY 是否与设计一致 — **已修复**：原为 `100_000`，设计文档要求 `10_000`，已修正 ✅
 - [x] 市场状态：错误码 3001/3002 是否正确 — `MarketNotFoundError(3001)`, `MarketNotActiveError(3002)` ✅
 - [x] 余额冻结：BUY 冻结公式 `original_price * qty + ceil_fee` 是否正确 — `trade_value + _calc_max_fee(trade_value)` ✅
 - [x] 仓位冻结：卖单 YES/NO shares 冻结逻辑是否正确 — NATIVE_SELL 冻结 `yes_pending_sell`；SYNTHETIC_BUY 冻结 `no_pending_sell` ✅
 - [x] TAKER_FEE_BPS=20：天花板除法 `(value * 20 + 9999) // 10000` ✅
 
-**状态**：✅ PASS — 无问题
+**状态**：✅ FIXED（1 个 medium 问题已修复）
 
 **审查结果**：
 
-所有 5 个风控规则逻辑正确，错误码与 errors.py 完全一致。SYNTHETIC_SELL（Buy NO）与 NATIVE_BUY 走同一冻结分支（冻结 FUNDS），逻辑正确。
+**Medium（已修复 commit `bec3307`）**：`MAX_ORDER_QUANTITY = 100_000`，但设计文档 `02_API接口契约.md` §5 line 505 明确写 `"max_order_quantity": 10000`，差了 10 倍。已修正为 `10_000`。
+
+其余 4 个规则逻辑全部正确，错误码与 errors.py 完全一致。SYNTHETIC_SELL（Buy NO）与 NATIVE_BUY 走同一冻结分支（冻结 FUNDS），逻辑正确。
 
 ---
 
@@ -208,12 +210,13 @@ transfer_no.py 是 transfer_yes.py 的 NO 镜像，逻辑正确（`no_trade_pric
 
 ## 最终结论
 
-**审查完成**。共发现并修复 **2 个 Critical Bug**：
+**审查完成**。共发现并修复 **2 个 Critical Bug + 1 个 Medium Bug**：
 
-| Bug | 文件 | 修复 commit |
-|-----|------|------------|
-| `write_wal_event` SQL 插入不存在的列（`order_id`, `user_id`, `id`） | `src/pm_clearing/infrastructure/ledger.py` | `8ed7584` |
-| `orders.id` 为 UUID 类型但代码使用 snowflake 字符串 ID | `alembic/versions/010_alter_orders_id_to_varchar.py` | `8ed7584` |
+| Bug | 严重级别 | 文件 | 修复 commit |
+|-----|----------|------|------------|
+| `write_wal_event` SQL 插入不存在的列（`order_id`, `user_id`, `id`） | Critical | `src/pm_clearing/infrastructure/ledger.py` | `8ed7584` |
+| `orders.id` 为 UUID 类型但代码使用 snowflake 字符串 ID | Critical | `alembic/versions/010_alter_orders_id_to_varchar.py` | `8ed7584` |
+| `MAX_ORDER_QUANTITY = 100_000` 应为 `10_000`（设计文档 §5） | Medium | `src/pm_risk/rules/order_limit.py` | `bec3307` |
 
 **预先修复的 2 个 Bug**（commit `903c658`）：
 
