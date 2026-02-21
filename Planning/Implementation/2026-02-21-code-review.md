@@ -244,8 +244,11 @@ transfer_no.py 是 transfer_yes.py 的 NO 镜像，逻辑正确（`no_trade_pric
 
 **非阻塞 MVP TODO**：
 
-1. Fee collection 未实现：`fee.py` 函数存在但未被调用。冻结额度已覆盖最大手续费，但手续费不作为平台收入记账，`ledger_entries` 里 FEE/MINT_COST 等条目从未写入。
-2. `buy_original_price=0` 当 SELL 是 taker：resting BUY 的 original_price 未存于 BookOrder，影响未来 TRANSFER_NO 场景的 buy 侧手续费计算。
-3. 分页 cursor 风格不一致（pm_order 用 raw ID，pm_account 用 base64 JSON）。
+1. **Fee collection 未实现**：`fee.py` 函数存在但未被调用。冻结额度已覆盖最大手续费，但手续费不作为平台收入记账，`ledger_entries` 里 FEE/MINT_COST 等条目从未写入。资金不会丢失（多冻结的手续费留在 frozen_balance），但平台无收入。
+2. **`buy_original_price=0` 当 SELL 是 taker**：resting BUY 的 original_price 未存于 BookOrder，影响未来 TRANSFER_NO 场景的 buy 侧手续费计算。
+3. **`netting_result` 字段命名不符**：代码返回 `{"netting_qty": N, "refund_amount": N}` 但 API 契约 §5.1 要求 `{"pairs_netted": N, "released_cents": N, "released_display": "$N.NN"}`。netting 不常触发，暂不阻塞核心流程测试。
+4. **`TradeResponse` 仍是内部视角**：当前返回 `buy_order_id`/`sell_order_id`（内部 ID）。设计文档要求用户视角（`counterparty_side`、`role`、`fee_cents`、`realized_pnl_cents`、`executed_at`）。需要 TradeResult 扩展 + 交易记录持久化，留 Phase 2。
+5. **`OrderStatus.NEW` 是死代码**：DB 默认 `'NEW'`，但代码始终显式设 `status="OPEN"`，`'NEW'` 状态永远不被创建。枚举里保留了 `NEW` 但系统不使用。
+6. **分页 cursor 风格不一致**：pm_order 用 raw ID 字符串，pm_account 用 base64 JSON。功能正确但 API 风格不统一。
 
 **结论：代码可以进入 DB 集成测试阶段。** 需先运行 `alembic upgrade head` 应用迁移 010，再跑集成测试。
