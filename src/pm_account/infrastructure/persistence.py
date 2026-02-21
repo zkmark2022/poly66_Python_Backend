@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.pm_account.domain.models import Account, LedgerEntry, Position
 from src.pm_common.enums import LedgerEntryType
-from src.pm_common.errors import InsufficientBalanceError, InsufficientPositionError
+from src.pm_common.errors import InsufficientBalanceError, InsufficientPositionError, InternalError
 
 # ---------------------------------------------------------------------------
 # SQL: accounts mutations
@@ -209,7 +209,7 @@ class AccountRepository:
         result = await db.execute(_DEPOSIT_SQL, {"user_id": user_id, "amount": amount})
         row = result.fetchone()
         if row is None:
-            raise InsufficientBalanceError(amount, 0)
+            raise InternalError(f"Account not found for user {user_id}")
         account = _row_to_account(row)
         ledger_result = await db.execute(
             _INSERT_LEDGER_SQL,
@@ -224,7 +224,8 @@ class AccountRepository:
             },
         )
         ledger_row = ledger_result.fetchone()
-        assert ledger_row is not None
+        if ledger_row is None:
+            raise InternalError("Ledger insert returned no rows — this should never happen")
         return account, _row_to_ledger(ledger_row)
 
     async def withdraw(
@@ -251,7 +252,8 @@ class AccountRepository:
             },
         )
         ledger_row = ledger_result.fetchone()
-        assert ledger_row is not None
+        if ledger_row is None:
+            raise InternalError("Ledger insert returned no rows — this should never happen")
         return account, _row_to_ledger(ledger_row)
 
     async def freeze_funds(
@@ -284,7 +286,8 @@ class AccountRepository:
             },
         )
         ledger_row = ledger_result.fetchone()
-        assert ledger_row is not None
+        if ledger_row is None:
+            raise InternalError("Ledger insert returned no rows — this should never happen")
         return account, _row_to_ledger(ledger_row)
 
     async def unfreeze_funds(
@@ -299,7 +302,10 @@ class AccountRepository:
         result = await db.execute(_UNFREEZE_FUNDS_SQL, {"user_id": user_id, "amount": amount})
         row = result.fetchone()
         if row is None:
-            raise InsufficientBalanceError(amount, 0)
+            acc_result = await db.execute(_GET_ACCOUNT_SQL, {"user_id": user_id})
+            acc_row = acc_result.fetchone()
+            frozen = acc_row.frozen_balance if acc_row else 0
+            raise InsufficientBalanceError(amount, frozen)
         account = _row_to_account(row)
         ledger_result = await db.execute(
             _INSERT_LEDGER_SQL,
@@ -314,7 +320,8 @@ class AccountRepository:
             },
         )
         ledger_row = ledger_result.fetchone()
-        assert ledger_row is not None
+        if ledger_row is None:
+            raise InternalError("Ledger insert returned no rows — this should never happen")
         return account, _row_to_ledger(ledger_row)
 
     async def get_or_create_position(
@@ -324,7 +331,8 @@ class AccountRepository:
             _GET_OR_CREATE_POSITION_SQL, {"user_id": user_id, "market_id": market_id}
         )
         row = result.fetchone()
-        assert row is not None
+        if row is None:
+            raise InternalError("Ledger insert returned no rows — this should never happen")
         return _row_to_position(row)
 
     async def freeze_yes_position(
