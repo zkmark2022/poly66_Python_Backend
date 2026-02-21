@@ -14,7 +14,7 @@ from src.pm_order.domain.models import Order
 _INSERT_ORDER_SQL = text("""
     INSERT INTO orders (id, client_order_id, market_id, user_id,
         original_side, original_direction, original_price,
-        book_type, book_direction, book_price, time_in_force,
+        book_type, book_direction, book_price, price_type, time_in_force,
         quantity, filled_quantity, remaining_quantity,
         frozen_amount, frozen_asset_type, status)
     VALUES (:id, :client_order_id, :market_id, :user_id,

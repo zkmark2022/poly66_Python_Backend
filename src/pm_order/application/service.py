@@ -91,7 +91,12 @@ async def place_order(
         updated_at=utc_now(),
     )
     engine = get_matching_engine()
-    order, trades, netting_qty = await engine.place_order(order, _repo, db)
+    try:
+        order, trades, netting_qty = await engine.place_order(order, _repo, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     netting: dict[str, int] | None = (
         {"netting_qty": netting_qty, "refund_amount": netting_qty * 100} if netting_qty else None
     )
@@ -102,7 +107,12 @@ async def cancel_order(
     order_id: str, user_id: str, db: AsyncSession
 ) -> CancelOrderResponse:
     engine = get_matching_engine()
-    order = await engine.cancel_order(order_id, user_id, _repo, db)
+    try:
+        order = await engine.cancel_order(order_id, user_id, _repo, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     return CancelOrderResponse(
         order_id=order.id,
         unfrozen_amount=order.frozen_amount,
