@@ -1,5 +1,6 @@
 # tests/unit/test_clearing_pnl.py
 """Unit tests — clearing scenarios return (buy_pnl, sell_pnl)."""
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -7,18 +8,18 @@ import pytest
 from src.pm_matching.domain.models import TradeResult
 
 
-def _make_trade(**kwargs: object) -> TradeResult:
+def _make_trade(**kwargs: Any) -> TradeResult:
     return TradeResult(
         buy_order_id=str(kwargs.get("buy_order_id", "b1")),
         sell_order_id=str(kwargs.get("sell_order_id", "s1")),
         buy_user_id=str(kwargs.get("buy_user_id", "user-b")),
         sell_user_id=str(kwargs.get("sell_user_id", "user-s")),
         market_id=str(kwargs.get("market_id", "mkt-1")),
-        price=int(kwargs.get("price", 60)),  # type: ignore[arg-type]
-        quantity=int(kwargs.get("quantity", 10)),  # type: ignore[arg-type]
+        price=int(kwargs.get("price", 60)),
+        quantity=int(kwargs.get("quantity", 10)),
         buy_book_type=str(kwargs.get("buy_book_type", "NATIVE_BUY")),
         sell_book_type=str(kwargs.get("sell_book_type", "NATIVE_SELL")),
-        buy_original_price=int(kwargs.get("buy_original_price", 60)),  # type: ignore[arg-type]
+        buy_original_price=int(kwargs.get("buy_original_price", 60)),
         maker_order_id=str(kwargs.get("maker_order_id", "s1")),
         taker_order_id=str(kwargs.get("taker_order_id", "b1")),
     )
