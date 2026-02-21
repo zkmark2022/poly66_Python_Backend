@@ -116,7 +116,7 @@ DEV_MVP/
 | **Module 0** | 脚手架：Git / Docker / Alembic / 9张表 | ✅ 完成 |
 | **Module 1** | pm_common：enums / errors / cents / ID / DB / Redis | ✅ 完成 |
 | **Module 2** | pm_gateway：注册 / 登录 / JWT | ✅ 完成 |
-| **Module 3** | pm_account：充值 / 余额 / 流水 | 🔲 待开始 |
+| **Module 3** | pm_account：充值 / 余额 / 流水 | ✅ 完成 |
 | **Module 4** | pm_market：话题列表 / 订单簿快照 | 🔲 待开始 |
 | **Module 5** | pm_risk + pm_order：下单 / 风控 / 撮合入口 | 🔲 待开始 |
 | **Module 6** | pm_matching：内存订单簿 + 撮合引擎 | 🔲 待开始 |
@@ -127,12 +127,13 @@ DEV_MVP/
 ### 当前状态快照
 
 ```
-测试：85 单元 + 11 集成测试通过（make test）
+测试：109 单元 + 22 集成测试通过（make test）
 Lint：ruff 零报错（make lint）
 类型：mypy 严格模式零报错（make typecheck）
 数据库：11 条迁移全部可 downgrade → upgrade（全周期验证）
 种子数据：SYSTEM_RESERVE / PLATFORM_FEE / 3 个样本市场
 认证：POST /api/v1/auth/register|login|refresh 全部可用
+账户：GET /api/v1/account/balance|ledger, POST /api/v1/account/deposit|withdraw 全部可用
 ```
 
 ---
@@ -290,4 +291,4 @@ make migration MSG="describe change"  # 生成新迁移
 
 ---
 
-*最后更新: 2026-02-20 — Module 0 + Module 1 + Module 2 完成*
+*最后更新: 2026-02-20 — Module 0 + Module 1 + Module 2 + Module 3 完成*

@@ -1734,4 +1734,4 @@ git commit -m "test(pm_account): add integration tests for balance/deposit/withd
 
 ---
 
-*计划版本: v1.0 | 日期: 2026-02-20 | 状态: 待实施*
+*计划版本: v1.0 | 日期: 2026-02-20 | 状态: ✅ 全部完成*
