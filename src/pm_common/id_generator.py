@@ -56,3 +56,11 @@ class SnowflakeIdGenerator:
         while ts <= last_ts:
             ts = self._current_ms()
         return ts
+
+
+_default_generator = SnowflakeIdGenerator()
+
+
+def generate_id() -> str:
+    """Generate a unique snowflake-style string ID using the module-level default generator."""
+    return _default_generator.next_id()
