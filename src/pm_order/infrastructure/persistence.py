@@ -34,7 +34,7 @@ _UPDATE_ORDER_SQL = text("""
 _SELECT_COLUMNS = """
     id, client_order_id, market_id, user_id,
     original_side, original_direction, original_price,
-    book_type, book_direction, book_price, time_in_force,
+    book_type, book_direction, book_price, price_type, time_in_force,
     quantity, filled_quantity, remaining_quantity,
     frozen_amount, frozen_asset_type, status, cancel_reason, created_at, updated_at
 """
@@ -55,6 +55,8 @@ _LIST_ORDERS_SQL = text(f"""
     WHERE user_id = :user_id
       AND (CAST(:market_id AS TEXT) IS NULL OR market_id = :market_id)
       AND (CAST(:cursor_id AS TEXT) IS NULL OR id < :cursor_id)
+      AND (CAST(:statuses_csv AS TEXT) IS NULL
+           OR status = ANY(string_to_array(CAST(:statuses_csv AS TEXT), ',')))
     ORDER BY id DESC
     LIMIT :limit
 """)
@@ -156,6 +158,7 @@ class OrderRepository:
         cursor_id: str | None,
         db: AsyncSession,
     ) -> list[Order]:
+        statuses_csv = ",".join(statuses) if statuses else None
         result = await db.execute(
             _LIST_ORDERS_SQL,
             {
@@ -163,6 +166,7 @@ class OrderRepository:
                 "market_id": market_id,
                 "cursor_id": cursor_id,
                 "limit": limit,
+                "statuses_csv": statuses_csv,
             },
         )
         rows = result.fetchall()

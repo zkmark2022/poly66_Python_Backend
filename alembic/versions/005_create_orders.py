@@ -37,7 +37,7 @@ def upgrade() -> None:
             cancel_reason       VARCHAR(100),
             created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
             updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-            CONSTRAINT uq_orders_client_order_id    UNIQUE (client_order_id),
+            CONSTRAINT uq_orders_client_order_id    UNIQUE (client_order_id, user_id),
             CONSTRAINT ck_orders_original_side      CHECK (original_side IN ('YES', 'NO')),
             CONSTRAINT ck_orders_original_direction CHECK (original_direction IN ('BUY', 'SELL')),
             CONSTRAINT ck_orders_original_price     CHECK (original_price BETWEEN 1 AND 99),

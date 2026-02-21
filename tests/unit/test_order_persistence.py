@@ -1,6 +1,7 @@
 # tests/unit/test_order_persistence.py
 """Unit tests for OrderRepository using MagicMock AsyncSession."""
 from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -9,7 +10,7 @@ from src.pm_order.domain.models import Order
 from src.pm_order.infrastructure.persistence import OrderRepository
 
 
-def _make_row(**kwargs):
+def _make_row(**kwargs: Any) -> MagicMock:
     """Create a mock row with all Order fields."""
     row = MagicMock()
     row.id = kwargs.get("id", "order-1")
@@ -35,7 +36,7 @@ def _make_row(**kwargs):
     return row
 
 
-def _make_order(**kwargs) -> Order:
+def _make_order(**kwargs: Any) -> Order:
     return Order(
         id=kwargs.get("id", "order-1"),
         client_order_id=kwargs.get("client_order_id", "client-1"),
