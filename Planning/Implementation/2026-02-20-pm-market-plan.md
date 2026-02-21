@@ -1668,7 +1668,7 @@ git commit -m "test(pm_market): add integration tests for list/detail/orderbook 
 
 | 偏差 | 说明 |
 |------|------|
-| （待填写） | |
+| `_LIST_MARKETS_SQL` 全列查询 | 设计文档 §3.1 要求只 SELECT 16 个轻量字段；实现选择了全量 24 列（与 `_GET_MARKET_SQL` 一致）。`MarketListItem.from_domain()` 在 schema 层负责字段裁剪，行为正确。理由：一个 `_row_to_market` 复用，DRY，话题数 < 100，性能不是问题。 |
 
 ---
 
