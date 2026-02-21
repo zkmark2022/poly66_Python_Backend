@@ -93,6 +93,11 @@
 
 **Minor（非阻塞）**：`_make_trade_sell_incoming` 中 `buy_original_price=0`。当 sell 是 incoming（taker），resting BUY 的 `original_price` 未存入 `BookOrder`，导致 `buy_original_price=0`。这在 TRANSFER_NO/BURN 场景下会影响未来的费用计算（`fee.py: get_fee_trade_value(SYNTHETIC_SELL)` 使用此字段）。当前 MVP 不执行 per-trade 费用扣除，暂不阻塞。
 
+**注：Chapter B 子 agent 额外报告了 3 个"严重问题"，经人工交叉验证均为误报**：
+- "TradeResult 缺少 `scenario` 字段" → 误报：`clearing/service.py:20` 直接调用 `determine_scenario()`，不依赖 TradeResult.scenario
+- "`_sync_frozen_amount` 完全缺失" → 误报：该函数在 `engine.py:292` 实现，`engine.py:153` 调用（agent 只读了 matching_algo.py）
+- "`BookOrder` 缺少多个字段" → 误报：当前调用方（engine.py rebuild_orderbook）只用到现有 5 个字段，无功能缺陷
+
 ---
 
 ## Chapter C：pm_clearing Part 1 审查
