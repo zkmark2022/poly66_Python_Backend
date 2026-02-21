@@ -57,6 +57,8 @@ _LIST_ORDERS_SQL = text(f"""
       AND (CAST(:cursor_id AS TEXT) IS NULL OR id < :cursor_id)
       AND (CAST(:statuses_csv AS TEXT) IS NULL
            OR status = ANY(string_to_array(CAST(:statuses_csv AS TEXT), ',')))
+      AND (CAST(:side AS TEXT) IS NULL OR original_side = :side)
+      AND (CAST(:direction AS TEXT) IS NULL OR original_direction = :direction)
     ORDER BY id DESC
     LIMIT :limit
 """)
@@ -154,6 +156,8 @@ class OrderRepository:
         user_id: str,
         market_id: str | None,
         statuses: list[str] | None,
+        side: str | None,
+        direction: str | None,
         limit: int,
         cursor_id: str | None,
         db: AsyncSession,
@@ -167,6 +171,8 @@ class OrderRepository:
                 "cursor_id": cursor_id,
                 "limit": limit,
                 "statuses_csv": statuses_csv,
+                "side": side,
+                "direction": direction,
             },
         )
         rows = result.fetchall()

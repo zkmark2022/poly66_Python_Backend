@@ -26,14 +26,21 @@ def _order_to_response(order: Order) -> OrderResponse:
         id=order.id,
         client_order_id=order.client_order_id,
         market_id=order.market_id,
-        side=order.original_side,
-        direction=order.original_direction,
-        price_cents=order.original_price,
+        original_side=order.original_side,
+        original_direction=order.original_direction,
+        original_price_cents=order.original_price,
+        book_type=order.book_type,
+        price_type="LIMIT",
+        time_in_force=order.time_in_force,
         quantity=order.quantity,
         filled_quantity=order.filled_quantity,
         remaining_quantity=order.remaining_quantity,
+        frozen_amount=order.frozen_amount,
+        frozen_asset_type=order.frozen_asset_type,
         status=order.status,
-        time_in_force=order.time_in_force,
+        cancel_reason=order.cancel_reason,
+        created_at=order.created_at,
+        updated_at=order.updated_at,
     )
 
 
@@ -115,8 +122,10 @@ async def cancel_order(
         raise
     return CancelOrderResponse(
         order_id=order.id,
+        status=order.status,
         unfrozen_amount=order.frozen_amount,
         unfrozen_asset_type=order.frozen_asset_type,
+        remaining_quantity_cancelled=order.remaining_quantity,
     )
 
 
@@ -135,6 +144,8 @@ async def list_orders(
     user_id: str,
     market_id: str | None,
     status: str | None,
+    side: str | None,
+    direction: str | None,
     limit: int,
     cursor: str | None,
     db: AsyncSession,
@@ -144,6 +155,8 @@ async def list_orders(
         user_id=user_id,
         market_id=market_id,
         statuses=statuses,
+        side=side,
+        direction=direction,
         limit=limit + 1,
         cursor_id=cursor,
         db=db,
@@ -153,6 +166,7 @@ async def list_orders(
         orders = orders[:limit]
     next_cursor = orders[-1].id if has_more else None
     return OrderListResponse(
-        orders=[_order_to_response(o) for o in orders],
+        items=[_order_to_response(o) for o in orders],
         next_cursor=next_cursor,
+        has_more=has_more,
     )

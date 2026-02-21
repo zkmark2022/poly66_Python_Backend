@@ -113,7 +113,7 @@ class TestOrderRepository:
         result_mock.fetchall.return_value = []
         db.execute.return_value = result_mock
         repo = OrderRepository()
-        orders = await repo.list_by_user("user-1", None, None, 20, None, db)
+        orders = await repo.list_by_user("user-1", None, None, None, None, 20, None, db)
         assert orders == []
 
     @pytest.mark.asyncio
@@ -123,7 +123,7 @@ class TestOrderRepository:
         result_mock.fetchall.return_value = [_make_row(), _make_row(id="order-2")]
         db.execute.return_value = result_mock
         repo = OrderRepository()
-        orders = await repo.list_by_user("user-1", None, None, 20, None, db)
+        orders = await repo.list_by_user("user-1", None, None, None, None, 20, None, db)
         assert len(orders) == 2
 
     @pytest.mark.asyncio
@@ -165,7 +165,7 @@ class TestOrderRepository:
         result_mock.fetchall.return_value = [_make_row(market_id="mkt-specific")]
         db.execute.return_value = result_mock
         repo = OrderRepository()
-        orders = await repo.list_by_user("user-1", "mkt-specific", None, 10, None, db)
+        orders = await repo.list_by_user("user-1", "mkt-specific", None, None, None, 10, None, db)
         assert len(orders) == 1
         assert orders[0].market_id == "mkt-specific"
 
@@ -176,6 +176,6 @@ class TestOrderRepository:
         result_mock.fetchall.return_value = [_make_row(id="order-5")]
         db.execute.return_value = result_mock
         repo = OrderRepository()
-        orders = await repo.list_by_user("user-1", None, None, 20, "order-10", db)
+        orders = await repo.list_by_user("user-1", None, None, None, None, 20, "order-10", db)
         assert len(orders) == 1
         assert orders[0].id == "order-5"

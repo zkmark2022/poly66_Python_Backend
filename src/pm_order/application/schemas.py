@@ -1,4 +1,5 @@
 # src/pm_order/application/schemas.py
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, field_validator
@@ -33,14 +34,21 @@ class OrderResponse(BaseModel):
     id: str
     client_order_id: str
     market_id: str
-    side: str
-    direction: str
-    price_cents: int
+    original_side: str
+    original_direction: str
+    original_price_cents: int
+    book_type: str
+    price_type: str
+    time_in_force: str
     quantity: int
     filled_quantity: int
     remaining_quantity: int
+    frozen_amount: int
+    frozen_asset_type: str
     status: str
-    time_in_force: str
+    cancel_reason: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class PlaceOrderResponse(BaseModel):
@@ -51,10 +59,13 @@ class PlaceOrderResponse(BaseModel):
 
 class CancelOrderResponse(BaseModel):
     order_id: str
+    status: str
     unfrozen_amount: int
     unfrozen_asset_type: str
+    remaining_quantity_cancelled: int
 
 
 class OrderListResponse(BaseModel):
-    orders: list[OrderResponse]
+    items: list[OrderResponse]
     next_cursor: str | None
+    has_more: bool

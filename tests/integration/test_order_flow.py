@@ -102,9 +102,9 @@ class TestPlaceOrder:
         data = resp.json()
         order = data["order"]
         assert order["status"] == "OPEN"
-        assert order["side"] == "YES"
-        assert order["direction"] == "BUY"
-        assert order["price_cents"] == 40
+        assert order["original_side"] == "YES"
+        assert order["original_direction"] == "BUY"
+        assert order["original_price_cents"] == 40
         assert order["quantity"] == 5
         assert order["filled_quantity"] == 0
         assert order["remaining_quantity"] == 5
@@ -225,9 +225,10 @@ class TestPlaceOrder:
         assert "trades" in data
         assert "netting_result" in data
         order = data["order"]
-        for field in ("id", "client_order_id", "market_id", "side", "direction",
-                      "price_cents", "quantity", "filled_quantity", "remaining_quantity",
-                      "status", "time_in_force"):
+        for field in ("id", "client_order_id", "market_id", "original_side",
+                      "original_direction", "original_price_cents", "book_type",
+                      "price_type", "quantity", "filled_quantity", "remaining_quantity",
+                      "frozen_amount", "frozen_asset_type", "status", "time_in_force"):
             assert field in order, f"Missing field: {field}"
 
 
@@ -552,7 +553,7 @@ class TestListOrders:
         resp = await client.get("/api/v1/orders", headers=headers)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["orders"] == []
+        assert data["items"] == []
         assert data["next_cursor"] is None
 
     async def test_placed_order_appears_in_list(self, client: AsyncClient) -> None:
@@ -575,7 +576,7 @@ class TestListOrders:
 
         resp = await client.get("/api/v1/orders", headers=headers)
         assert resp.status_code == 200
-        orders = resp.json()["orders"]
+        orders = resp.json()["items"]
         assert len(orders) == 1
         assert orders[0]["market_id"] == ACTIVE_MARKET_ID
 
@@ -604,7 +605,7 @@ class TestListOrders:
             f"/api/v1/orders?market_id={ACTIVE_MARKET_ID}", headers=headers
         )
         assert resp.status_code == 200
-        orders = resp.json()["orders"]
+        orders = resp.json()["items"]
         assert len(orders) == 1
         assert orders[0]["market_id"] == ACTIVE_MARKET_ID
 
@@ -630,7 +631,7 @@ class TestListOrders:
 
         resp = await client.get("/api/v1/orders?status=OPEN", headers=headers)
         assert resp.status_code == 200
-        orders = resp.json()["orders"]
+        orders = resp.json()["items"]
         assert all(o["status"] == "OPEN" for o in orders)
 
 

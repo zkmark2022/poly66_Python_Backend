@@ -23,6 +23,8 @@ class OrderRepositoryProtocol(Protocol):
         user_id: str,
         market_id: str | None,
         statuses: list[str] | None,
+        side: str | None,
+        direction: str | None,
         limit: int,
         cursor_id: str | None,
         db: AsyncSession,

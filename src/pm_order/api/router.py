@@ -43,10 +43,14 @@ async def list_orders(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     market_id: str | None = Query(None, description="Filter by market ID"),
     status: str | None = Query(None, description="Filter by order status"),
+    side: str | None = Query(None, description="Filter by side (YES or NO)"),
+    direction: str | None = Query(None, description="Filter by direction (BUY or SELL)"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     cursor: str | None = Query(None, description="Pagination cursor (order ID)"),
 ) -> OrderListResponse:
-    return await svc.list_orders(str(current_user.id), market_id, status, limit, cursor, db)
+    return await svc.list_orders(
+        str(current_user.id), market_id, status, side, direction, limit, cursor, db
+    )
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
