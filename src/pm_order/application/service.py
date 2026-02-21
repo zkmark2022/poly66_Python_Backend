@@ -2,7 +2,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.pm_common.datetime_utils import utc_now
-from src.pm_common.errors import AppError
+from src.pm_common.errors import AppError, DuplicateOrderError
 from src.pm_common.id_generator import generate_id
 from src.pm_matching.application.service import get_matching_engine
 from src.pm_matching.domain.models import TradeResult
@@ -69,11 +69,7 @@ async def place_order(
             or existing.original_price != req.price_cents
             or existing.quantity != req.quantity
         ):
-            raise AppError(
-                4005,
-                "Idempotency conflict: same client_order_id, different payload",
-                http_status=409,
-            )
+            raise DuplicateOrderError(req.client_order_id)
         return _build_place_response(existing, [], None)
 
     order = Order(
