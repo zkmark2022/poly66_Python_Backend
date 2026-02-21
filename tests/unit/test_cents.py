@@ -45,6 +45,15 @@ class TestCentsToDisplay:
     def test_exact_dollar(self) -> None:
         assert cents_to_display(10000) == "$100.00"
 
+    def test_negative_small(self) -> None:
+        assert cents_to_display(-1200) == "-$12.00"
+
+    def test_negative_large(self) -> None:
+        assert cents_to_display(-6500) == "-$65.00"
+
+    def test_negative_with_comma(self) -> None:
+        assert cents_to_display(-150000) == "-$1,500.00"
+
 
 class TestCalculateFee:
     def test_basic(self) -> None:

@@ -1,10 +1,13 @@
 """Tests for pm_common.errors and pm_common.response."""
 
 from src.pm_common.errors import (
+    AccountFrozenError,
     AppError,
     InsufficientBalanceError,
+    InvalidResolutionResultError,
     MarketNotActiveError,
     MarketNotFoundError,
+    MarketStateInvalidForResolutionError,
     OrderNotFoundError,
     SelfTradeError,
 )
@@ -53,6 +56,21 @@ class TestSpecificErrors:
     def test_self_trade(self) -> None:
         err = SelfTradeError()
         assert err.code == 4003
+        assert err.http_status == 422
+
+    def test_account_frozen(self) -> None:
+        err = AccountFrozenError("user-1")
+        assert err.code == 2002
+        assert err.http_status == 422
+
+    def test_market_state_invalid_for_resolution(self) -> None:
+        err = MarketStateInvalidForResolutionError("MKT-1")
+        assert err.code == 3003
+        assert err.http_status == 422
+
+    def test_invalid_resolution_result(self) -> None:
+        err = InvalidResolutionResultError("MAYBE")
+        assert err.code == 3004
         assert err.http_status == 422
 
 

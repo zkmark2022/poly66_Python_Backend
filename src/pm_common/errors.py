@@ -45,7 +45,7 @@ class InvalidCredentialsError(AppError):
 
 class AccountDisabledError(AppError):
     def __init__(self) -> None:
-        super().__init__(1004, "Account is disabled", 403)
+        super().__init__(1004, "Account is disabled", 422)
 
 
 class InvalidRefreshTokenError(AppError):
@@ -65,9 +65,9 @@ class InsufficientBalanceError(AppError):
         )
 
 
-class AccountNotFoundError(AppError):
+class AccountFrozenError(AppError):
     def __init__(self, user_id: str) -> None:
-        super().__init__(2002, f"Account not found for user {user_id}", 404)
+        super().__init__(2002, f"Account is frozen for user {user_id}", 422)
 
 
 # --- 3xxx: Market ---
@@ -81,6 +81,16 @@ class MarketNotFoundError(AppError):
 class MarketNotActiveError(AppError):
     def __init__(self, market_id: str) -> None:
         super().__init__(3002, f"Market is not active: {market_id}", 422)
+
+
+class MarketStateInvalidForResolutionError(AppError):
+    def __init__(self, market_id: str) -> None:
+        super().__init__(3003, f"Market state does not allow resolution: {market_id}", 422)
+
+
+class InvalidResolutionResultError(AppError):
+    def __init__(self, result: str) -> None:
+        super().__init__(3004, f"Invalid resolution result: {result}", 422)
 
 
 # --- 4xxx: Order ---

@@ -12,10 +12,11 @@ def validate_price(price: int) -> None:
 
 
 def cents_to_display(cents: int) -> str:
-    """Convert cents to display string: 6500 -> '$65.00'."""
-    dollars = cents // 100
-    remainder = cents % 100
-    return f"${dollars:,}.{remainder:02d}"
+    """Convert cents to display string: 6500 -> '$65.00', -1200 -> '-$12.00'."""
+    if cents < 0:
+        abs_cents = -cents
+        return f"-${abs_cents // 100:,}.{abs_cents % 100:02d}"
+    return f"${cents // 100:,}.{cents % 100:02d}"
 
 
 def calculate_fee(trade_value: int, fee_rate_bps: int) -> int:
