@@ -39,8 +39,12 @@ class AccountApplicationService:
     async def deposit(
         self, db: AsyncSession, user_id: str, amount_cents: int
     ) -> DepositResponse:
-        async with db.begin():
+        try:
             account, entry = await self._repo.deposit(db, user_id, amount_cents)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
         return DepositResponse.from_result(
             available=account.available_balance,
             amount=amount_cents,
@@ -50,8 +54,12 @@ class AccountApplicationService:
     async def withdraw(
         self, db: AsyncSession, user_id: str, amount_cents: int
     ) -> WithdrawResponse:
-        async with db.begin():
+        try:
             account, entry = await self._repo.withdraw(db, user_id, amount_cents)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
         return WithdrawResponse.from_result(
             available=account.available_balance,
             amount=amount_cents,

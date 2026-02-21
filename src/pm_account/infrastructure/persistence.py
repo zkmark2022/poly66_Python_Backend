@@ -139,8 +139,8 @@ _LIST_LEDGER_SQL = text("""
            reference_type, reference_id, description, created_at
     FROM ledger_entries
     WHERE user_id = :user_id
-      AND (:cursor_id IS NULL OR id < :cursor_id)
-      AND (:entry_type IS NULL OR entry_type = :entry_type)
+      AND (CAST(:cursor_id AS BIGINT) IS NULL OR id < CAST(:cursor_id AS BIGINT))
+      AND (CAST(:entry_type AS TEXT) IS NULL OR entry_type = CAST(:entry_type AS TEXT))
     ORDER BY id DESC
     LIMIT :limit
 """)

@@ -79,9 +79,7 @@ class TestDeposit:
             _make_ledger_entry(1, 10000, 110000),
         )
         svc = AccountApplicationService(repo=mock_repo)
-        db = MagicMock()
-        db.begin.return_value.__aenter__ = AsyncMock(return_value=None)
-        db.begin.return_value.__aexit__ = AsyncMock(return_value=False)
+        db = AsyncMock()
 
         result = await svc.deposit(db, "user-1", 10000)
 
@@ -90,6 +88,7 @@ class TestDeposit:
         assert result.available_balance_cents == 110000
         assert result.ledger_entry_id == 1
         assert result.deposited_display == "$100.00"
+        db.commit.assert_awaited_once()
 
 
 class TestWithdraw:
@@ -100,9 +99,7 @@ class TestWithdraw:
             _make_ledger_entry(2, -10000, 90000, "WITHDRAW"),
         )
         svc = AccountApplicationService(repo=mock_repo)
-        db = MagicMock()
-        db.begin.return_value.__aenter__ = AsyncMock(return_value=None)
-        db.begin.return_value.__aexit__ = AsyncMock(return_value=False)
+        db = AsyncMock()
 
         result = await svc.withdraw(db, "user-1", 10000)
 
@@ -110,6 +107,7 @@ class TestWithdraw:
         assert result.withdrawn_cents == 10000
         assert result.available_balance_cents == 90000
         assert result.ledger_entry_id == 2
+        db.commit.assert_awaited_once()
 
 
 class TestListLedger:
