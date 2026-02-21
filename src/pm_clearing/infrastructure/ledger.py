@@ -7,8 +7,6 @@ import json
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.pm_common.datetime_utils import utc_now
-from src.pm_common.id_generator import generate_id
 
 _INSERT_LEDGER_SQL = text("""
     INSERT INTO ledger_entries
@@ -17,8 +15,8 @@ _INSERT_LEDGER_SQL = text("""
 """)
 
 _INSERT_WAL_SQL = text("""
-    INSERT INTO wal_events (id, event_type, order_id, market_id, user_id, payload, created_at)
-    VALUES (:id, :event_type, :order_id, :market_id, :user_id, :payload, :created_at)
+    INSERT INTO wal_events (market_id, event_type, payload)
+    VALUES (:market_id, :event_type, :payload)
 """)
 
 
@@ -53,16 +51,17 @@ async def write_wal_event(
     payload: dict[str, object],
     db: AsyncSession,
 ) -> None:
-    """Insert one row into wal_events within the caller's transaction."""
+    """Insert one row into wal_events within the caller's transaction.
+
+    order_id and user_id are stored inside the JSONB payload column
+    (the table has a GIN index on payload->'order_id').
+    """
+    full_payload = {"order_id": order_id, "user_id": user_id, **payload}
     await db.execute(
         _INSERT_WAL_SQL,
         {
-            "id": generate_id(),
-            "event_type": event_type,
-            "order_id": order_id,
             "market_id": market_id,
-            "user_id": user_id,
-            "payload": json.dumps(payload),
-            "created_at": utc_now(),
+            "event_type": event_type,
+            "payload": json.dumps(full_payload),
         },
     )
