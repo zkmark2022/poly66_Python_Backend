@@ -1,11 +1,9 @@
 """Unit tests for pm_clearing scenario handlers and dispatcher."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from src.pm_clearing.domain.scenarios.mint import clear_mint
 from src.pm_clearing.domain.scenarios.transfer_yes import clear_transfer_yes
 from src.pm_clearing.domain.service import settle_trade
-from src.pm_common.enums import TradeScenario
 from src.pm_matching.domain.models import TradeResult
 
 
@@ -40,7 +38,7 @@ class TestClearMint:
         )
         mock_db = AsyncMock()
         await clear_mint(trade, market, mock_db)
-        assert market.reserve_balance == 10000  # 100×100
+        assert market.reserve_balance == 10000  # 100 x 100
         assert market.total_yes_shares == 100
         assert market.total_no_shares == 100
 
