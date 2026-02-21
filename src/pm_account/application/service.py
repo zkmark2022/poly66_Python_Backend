@@ -1,7 +1,8 @@
 """AccountApplicationService — thin composition layer.
 
 Combines repository calls with schema transformations.
-Deposit and withdraw use `async with db.begin()` to manage transactions.
+Deposit and withdraw use explicit commit/rollback for transaction management,
+since the SQLAlchemy session may have autobegin active from upstream dependencies.
 Other operations (get_balance, list_ledger) are read-only and run without explicit transaction.
 """
 
