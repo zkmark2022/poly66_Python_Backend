@@ -43,7 +43,9 @@ _ADD_BALANCE_SQL = text("""
 """)
 
 
-async def clear_burn(trade: TradeResult, market: object, db: AsyncSession) -> None:
+async def clear_burn(
+    trade: TradeResult, market: object, db: AsyncSession
+) -> tuple[int | None, int | None]:
     """BURN: SYNTHETIC_BUY + NATIVE_SELL — destroy YES/NO pair, release reserve."""
     payout_per_share = 100  # each pair worth 100 cents at settlement
 
@@ -111,3 +113,7 @@ async def clear_burn(trade: TradeResult, market: object, db: AsyncSession) -> No
     # pnl adjustments: refund to both sides from reserve
     market.pnl_pool -= yes_proceeds - yes_cost_rel  # type: ignore[attr-defined]
     market.pnl_pool -= no_proceeds - no_cost_rel  # type: ignore[attr-defined]
+
+    sell_realized_pnl = yes_proceeds - yes_cost_rel
+    buy_realized_pnl = no_proceeds - no_cost_rel
+    return (buy_realized_pnl, sell_realized_pnl)

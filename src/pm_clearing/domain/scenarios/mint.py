@@ -31,7 +31,9 @@ _ADD_NO_VOLUME_SQL = text("""
 """)
 
 
-async def clear_mint(trade: TradeResult, market: object, db: AsyncSession) -> None:
+async def clear_mint(
+    trade: TradeResult, market: object, db: AsyncSession
+) -> tuple[int | None, int | None]:
     """MINT: NATIVE_BUY + SYNTHETIC_SELL — create YES/NO contract pair."""
     buyer_cost = trade.price * trade.quantity
     seller_cost = (100 - trade.price) * trade.quantity
@@ -69,3 +71,5 @@ async def clear_mint(trade: TradeResult, market: object, db: AsyncSession) -> No
     market.reserve_balance += trade.quantity * 100  # type: ignore[attr-defined]
     market.total_yes_shares += trade.quantity  # type: ignore[attr-defined]
     market.total_no_shares += trade.quantity  # type: ignore[attr-defined]
+
+    return (None, None)

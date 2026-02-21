@@ -47,7 +47,7 @@ _ADD_BALANCE_SQL = text("""
 
 async def clear_transfer_yes(
     trade: TradeResult, market: object, db: AsyncSession
-) -> None:
+) -> tuple[int | None, int | None]:
     """TRANSFER_YES: NATIVE_BUY + NATIVE_SELL — YES shares change hands."""
     buyer_cost = trade.price * trade.quantity
 
@@ -95,3 +95,6 @@ async def clear_transfer_yes(
     )
 
     market.pnl_pool -= proceeds - cost_released  # type: ignore[attr-defined]
+
+    sell_realized_pnl = proceeds - cost_released
+    return (None, sell_realized_pnl)

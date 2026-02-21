@@ -15,15 +15,14 @@ async def settle_trade(
     market: object,
     db: AsyncSession,
     fee_bps: int,
-) -> None:
+) -> tuple[int | None, int | None]:
     """Determine scenario and dispatch to the appropriate clearing function."""
     scenario = determine_scenario(trade.buy_book_type, trade.sell_book_type)
     if scenario == TradeScenario.MINT:
-        await clear_mint(trade, market, db)
+        return await clear_mint(trade, market, db)
     elif scenario == TradeScenario.TRANSFER_YES:
-        await clear_transfer_yes(trade, market, db)
+        return await clear_transfer_yes(trade, market, db)
     elif scenario == TradeScenario.TRANSFER_NO:
-        await clear_transfer_no(trade, market, db)
+        return await clear_transfer_no(trade, market, db)
     else:
-        await clear_burn(trade, market, db)
-    # Fee collection and refund handled by caller (MatchingEngine)
+        return await clear_burn(trade, market, db)

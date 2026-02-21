@@ -47,7 +47,7 @@ _ADD_BALANCE_SQL = text("""
 
 async def clear_transfer_no(
     trade: TradeResult, market: object, db: AsyncSession
-) -> None:
+) -> tuple[int | None, int | None]:
     """TRANSFER_NO: SYNTHETIC_BUY + SYNTHETIC_SELL — NO shares change hands."""
     no_trade_price = 100 - trade.price  # convert YES trade price to NO price
     seller_cost = no_trade_price * trade.quantity  # SYNTHETIC_SELL (Buy NO) pays this
@@ -95,3 +95,6 @@ async def clear_transfer_no(
     )
 
     market.pnl_pool -= proceeds - cost_released  # type: ignore[attr-defined]
+
+    buy_realized_pnl = proceeds - cost_released
+    return (buy_realized_pnl, None)
