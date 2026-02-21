@@ -47,9 +47,7 @@ async def get_current_user(
     if not user_id:
         raise _CREDENTIALS_EXCEPTION
 
-    result = await db.execute(
-        select(UserModel).where(UserModel.id == user_id)
-    )
+    result = await db.execute(select(UserModel).where(UserModel.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
         raise _CREDENTIALS_EXCEPTION

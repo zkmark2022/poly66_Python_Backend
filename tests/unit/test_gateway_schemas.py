@@ -21,21 +21,15 @@ class TestRegisterRequest:
 
     def test_username_too_long(self) -> None:
         with pytest.raises(ValidationError):
-            RegisterRequest(
-                username="a" * 65, email="a@b.com", password="SecureP@ss1"
-            )
+            RegisterRequest(username="a" * 65, email="a@b.com", password="SecureP@ss1")
 
     def test_username_invalid_chars(self) -> None:
         with pytest.raises(ValidationError):
-            RegisterRequest(
-                username="alice!", email="a@b.com", password="SecureP@ss1"
-            )
+            RegisterRequest(username="alice!", email="a@b.com", password="SecureP@ss1")
 
     def test_invalid_email(self) -> None:
         with pytest.raises(ValidationError):
-            RegisterRequest(
-                username="alice", email="not-an-email", password="SecureP@ss1"
-            )
+            RegisterRequest(username="alice", email="not-an-email", password="SecureP@ss1")
 
     def test_password_too_short(self) -> None:
         with pytest.raises(ValidationError):
@@ -43,18 +37,12 @@ class TestRegisterRequest:
 
     def test_password_no_uppercase(self) -> None:
         with pytest.raises(ValidationError):
-            RegisterRequest(
-                username="alice", email="a@b.com", password="alllower1"
-            )
+            RegisterRequest(username="alice", email="a@b.com", password="alllower1")
 
     def test_password_no_lowercase(self) -> None:
         with pytest.raises(ValidationError):
-            RegisterRequest(
-                username="alice", email="a@b.com", password="ALLUPPER1"
-            )
+            RegisterRequest(username="alice", email="a@b.com", password="ALLUPPER1")
 
     def test_password_no_digit(self) -> None:
         with pytest.raises(ValidationError):
-            RegisterRequest(
-                username="alice", email="a@b.com", password="NoDigitPass"
-            )
+            RegisterRequest(username="alice", email="a@b.com", password="NoDigitPass")
