@@ -103,7 +103,7 @@ class MatchingEngine:
         lock = self._get_or_create_lock(order.market_id)
         async with lock:
             try:
-                async with db.begin():
+                async with db.begin_nested():
                     return await self._place_order_inner(order, repo, db)
             except Exception:
                 # Evict orderbook — will lazy-rebuild on next request
@@ -152,6 +152,8 @@ class MatchingEngine:
             await settle_trade(tr, market, db, fee_bps=TAKER_FEE_BPS)
             _sync_frozen_amount(order, order.remaining_quantity)
             await repo.update_status(order, db)
+            # Update maker order status in DB
+            await _update_maker_status(tr, repo, db)
             # Netting for buyer
             nq = await execute_netting_if_needed(tr.buy_user_id, order.market_id, market, db)
             netting_qty += nq
@@ -272,7 +274,7 @@ class MatchingEngine:
         lock = self._get_or_create_lock(order.market_id)
         async with lock:
             try:
-                async with db.begin():
+                async with db.begin_nested():
                     ob = self._get_or_create_orderbook(order.market_id)
                     ob.cancel_order(order_id)
                     await self._unfreeze_remainder(order, db)
@@ -287,6 +289,24 @@ class MatchingEngine:
             except Exception:
                 self._orderbooks.pop(order.market_id, None)
                 raise
+
+
+async def _update_maker_status(
+    tr: TradeResult, repo: OrderRepositoryProtocol, db: AsyncSession
+) -> None:
+    """Load the resting (maker) order from DB and persist its updated fill state."""
+    maker = await repo.get_by_id(tr.maker_order_id, db)
+    if maker is None:
+        return
+    maker.filled_quantity += tr.quantity
+    maker.remaining_quantity -= tr.quantity
+    if maker.remaining_quantity <= 0:
+        maker.remaining_quantity = 0
+        maker.status = "FILLED"
+    else:
+        maker.status = "PARTIALLY_FILLED"
+    _sync_frozen_amount(maker, maker.remaining_quantity)
+    await repo.update_status(maker, db)
 
 
 def _sync_frozen_amount(order: Order, remaining_qty: int) -> None:
