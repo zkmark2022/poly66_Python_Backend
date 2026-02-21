@@ -48,7 +48,7 @@ class TestCursorEncodeDecode:
         ts, mid = cursor_decode(encoded)
         assert mid == "MKT-BTC"
         assert ts is not None
-        assert "2026" in ts
+        assert ts == "2026-01-15T12:00:00+00:00"
 
     def test_decode_none_returns_none(self):
         ts, mid = cursor_decode(None)

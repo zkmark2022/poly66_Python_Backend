@@ -38,7 +38,7 @@ def cursor_decode(cursor: str | None) -> tuple[str | None, str | None]:
     try:
         data = json.loads(base64.b64decode(cursor.encode()).decode())
         return data["ts"], data["id"]
-    except Exception:
+    except (ValueError, KeyError, UnicodeDecodeError):
         return None, None
 
 
@@ -172,6 +172,9 @@ class MarketListResponse(BaseModel):
 
 
 class MarketDetail(BaseModel):
+    # created_at and updated_at are intentionally omitted: §4.2 of the API
+    # contract (GET /markets/{market_id}) does not list these fields in the
+    # response body.
     id: str
     title: str
     description: str | None
