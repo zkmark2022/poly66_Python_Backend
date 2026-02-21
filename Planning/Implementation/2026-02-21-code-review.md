@@ -20,7 +20,7 @@
 | B | pm_matching (OrderBook + Algo + Scenario) | ✅ PASS | 1 minor |
 | C | pm_clearing Part 1 (fee + ledger + WAL + MINT + TRANSFER_YES) | ✅ FIXED | 1 critical fixed |
 | D | pm_clearing Part 2 (BURN + netting + invariants + settlement) | ✅ PASS | 0 |
-| E | pm_order (domain + transformer + repo + service + API) | ✅ FIXED | 1 critical fixed |
+| E | pm_order (domain + transformer + repo + service + API) | ✅ FIXED | 1 critical + 4 schema gaps fixed |
 | F | 跨模块一致性 (错误码 + 事务边界 + enum 对齐) | ✅ PASS | 0 |
 
 ---
@@ -185,13 +185,21 @@ transfer_no.py 是 transfer_yes.py 的 NO 镜像，逻辑正确（`no_trade_pric
 - [x] service.py：Order 对象构造完整 ✅
 - [x] router.py：HTTP method、status code、路由路径与设计文档一致 ✅
 
-**状态**：✅ FIXED
+**状态**：✅ FIXED（5 个问题全部已修复）
 
 **审查结果**：
 
-**CRITICAL（已修复 commit 8ed7584）**：`orders.id` 列是 UUID 类型，但 `generate_id()` 生成的是 snowflake 整数字符串（如 `"426827034521600"`），不是合法 UUID 格式，每次 INSERT 都会触发 `invalid input syntax for type uuid`。修复：添加迁移 `010_alter_orders_id_to_varchar.py`，将 `orders.id` 改为 `VARCHAR(64)`。
+**CRITICAL（已修复 commit `8ed7584`）**：`orders.id` 列是 UUID 类型，但 `generate_id()` 生成的是 snowflake 整数字符串，不是合法 UUID 格式。修复：迁移 `010_alter_orders_id_to_varchar.py` 将 `orders.id` 改为 `VARCHAR(64)`。
 
-`remaining_quantity` 是 `field(init=False)` 在 `__post_init__` 中由 `quantity - filled_quantity` 计算，row mapper 不传此字段，正确。
+**MAJOR × 4（已修复 commit `843d732`）**，均由 Chapter E 子 agent 发现并经 API 契约 §5 交叉验证确认：
+1. `OrderResponse` 字段命名错误：`side/direction/price_cents` → `original_side/original_direction/original_price_cents`；同时补充缺失的 `book_type`、`price_type`、`frozen_amount`、`frozen_asset_type`、`created_at`、`cancel_reason` 等字段
+2. `CancelOrderResponse` 缺少 `status`（"CANCELLED"）和 `remaining_quantity_cancelled` 字段（契约 §5.2 明确要求）
+3. `OrderListResponse` 字段名 `orders` → `items`；补充 `has_more` 字段（契约 §5.3 格式）
+4. GET /orders 缺少 `side`、`direction` 过滤参数（契约 §5.3 查询参数表）；已贯通 router → service → persistence SQL → repository protocol
+
+`remaining_quantity` 是 `field(init=False)` 在 `__post_init__` 中由 `quantity - filled_quantity` 计算，row mapper 不传此字段，正确 ✅
+
+**注：Chapter E 子 agent 另报告 `status='NEW' vs 'OPEN'` 为 CRITICAL** — 经分析为误报，两者均是 DB 约束合法值，代码显式设 'OPEN' 直接进入开放状态，语义正确。
 
 ---
 
@@ -215,13 +223,17 @@ transfer_no.py 是 transfer_yes.py 的 NO 镜像，逻辑正确（`no_trade_pric
 
 ## 最终结论
 
-**审查完成**。共发现并修复 **2 个 Critical Bug + 1 个 Medium Bug**：
+**审查完成**。共发现并修复 **2 个 Critical + 1 个 Medium + 4 个 Major Bug**：
 
 | Bug | 严重级别 | 文件 | 修复 commit |
 |-----|----------|------|------------|
 | `write_wal_event` SQL 插入不存在的列（`order_id`, `user_id`, `id`） | Critical | `src/pm_clearing/infrastructure/ledger.py` | `8ed7584` |
 | `orders.id` 为 UUID 类型但代码使用 snowflake 字符串 ID | Critical | `alembic/versions/010_alter_orders_id_to_varchar.py` | `8ed7584` |
 | `MAX_ORDER_QUANTITY = 100_000` 应为 `10_000`（设计文档 §5） | Medium | `src/pm_risk/rules/order_limit.py` | `bec3307` |
+| `OrderResponse` 字段命名错误 + 缺少 7 个字段（§5.1） | Major | `src/pm_order/application/schemas.py` | `843d732` |
+| `CancelOrderResponse` 缺少 `status` 和 `remaining_quantity_cancelled`（§5.2） | Major | `src/pm_order/application/schemas.py` | `843d732` |
+| `OrderListResponse` 字段名 `orders`→`items`；缺少 `has_more`（§5.3） | Major | `src/pm_order/application/schemas.py` | `843d732` |
+| GET /orders 缺少 `side`/`direction` 过滤参数（§5.3） | Major | `router.py`, `service.py`, `persistence.py`, `repository.py` | `843d732` |
 
 **预先修复的 2 个 Bug**（commit `903c658`）：
 
