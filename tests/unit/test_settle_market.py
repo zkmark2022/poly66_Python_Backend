@@ -130,7 +130,6 @@ class TestSettleMarketMultipleUsers:
         #        CLEAR user2 (no credit)
         #        CREDIT user3, CLEAR user3
         #        SETTLE_MARKET → total 8 calls
-        db.execute.side_effect = [other_mock] * 8
         db.execute.side_effect = [
             positions_mock,  # GET_POSITIONS
             other_mock,      # CREDIT user1
