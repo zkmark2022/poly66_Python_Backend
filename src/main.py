@@ -21,6 +21,8 @@ from src.pm_common.database import engine
 from src.pm_common.errors import AppError
 from src.pm_common.redis_client import close_redis, get_redis
 from src.pm_common.response import error_response
+from src.pm_gateway.api.router import router as auth_router
+from src.pm_gateway.middleware.request_log import RequestLogMiddleware
 
 
 @asynccontextmanager
@@ -43,6 +45,9 @@ app = FastAPI(
 )
 
 
+app.add_middleware(RequestLogMiddleware)
+
+
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     resp = error_response(exc.code, exc.message)
@@ -50,6 +55,9 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         status_code=exc.http_status,
         content=resp.model_dump(),
     )
+
+
+app.include_router(auth_router, prefix="/api/v1")
 
 
 @app.get("/health")
