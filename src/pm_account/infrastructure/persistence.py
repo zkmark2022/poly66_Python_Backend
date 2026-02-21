@@ -72,14 +72,24 @@ _INSERT_LEDGER_SQL = text("""
 # ---------------------------------------------------------------------------
 
 _GET_OR_CREATE_POSITION_SQL = text("""
-    INSERT INTO positions (user_id, market_id)
-    VALUES (:user_id, :market_id)
-    ON CONFLICT (user_id, market_id) DO UPDATE
-        SET updated_at = NOW()
-    RETURNING id, user_id, market_id,
-              yes_volume, yes_cost_sum, yes_pending_sell,
-              no_volume, no_cost_sum, no_pending_sell,
-              created_at, updated_at
+    WITH ins AS (
+        INSERT INTO positions (user_id, market_id)
+        VALUES (:user_id, :market_id)
+        ON CONFLICT (user_id, market_id) DO NOTHING
+        RETURNING id, user_id, market_id,
+                  yes_volume, yes_cost_sum, yes_pending_sell,
+                  no_volume, no_cost_sum, no_pending_sell,
+                  created_at, updated_at
+    )
+    SELECT * FROM ins
+    UNION ALL
+    SELECT id, user_id, market_id,
+           yes_volume, yes_cost_sum, yes_pending_sell,
+           no_volume, no_cost_sum, no_pending_sell,
+           created_at, updated_at
+    FROM positions
+    WHERE user_id = :user_id AND market_id = :market_id
+      AND NOT EXISTS (SELECT 1 FROM ins)
 """)
 
 _FREEZE_YES_SQL = text("""
@@ -332,7 +342,7 @@ class AccountRepository:
         )
         row = result.fetchone()
         if row is None:
-            raise InternalError("Ledger insert returned no rows — this should never happen")
+            raise InternalError("Position upsert returned no rows — this should never happen")
         return _row_to_position(row)
 
     async def freeze_yes_position(

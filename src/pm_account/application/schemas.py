@@ -35,11 +35,15 @@ def cursor_decode(cursor: str | None) -> int | None:
 
 
 class DepositRequest(BaseModel):
-    amount_cents: int = Field(..., gt=0, description="Amount to deposit in cents")
+    amount_cents: int = Field(
+        ..., gt=0, le=10_000_000, description="Amount to deposit in cents (max $100,000)"
+    )
 
 
 class WithdrawRequest(BaseModel):
-    amount_cents: int = Field(..., gt=0, description="Amount to withdraw in cents")
+    amount_cents: int = Field(
+        ..., gt=0, le=10_000_000, description="Amount to withdraw in cents (max $100,000)"
+    )
 
 
 # ---------------------------------------------------------------------------

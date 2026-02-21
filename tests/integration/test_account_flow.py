@@ -112,7 +112,7 @@ class TestWithdraw:
         token = await _register_and_login(client)
         resp = await client.post(
             "/api/v1/account/withdraw",
-            json={"amount_cents": 99999999},
+            json={"amount_cents": 1},  # valid amount, but fresh account has zero balance
             headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 422

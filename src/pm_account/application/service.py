@@ -17,6 +17,7 @@ from src.pm_account.application.schemas import (
     cursor_decode,
     cursor_encode,
 )
+from src.pm_account.domain.models import Account, LedgerEntry, Position
 from src.pm_account.domain.repository import AccountRepositoryProtocol
 from src.pm_account.infrastructure.persistence import AccountRepository
 from src.pm_common.cents import cents_to_display
@@ -101,3 +102,57 @@ class AccountApplicationService:
 
         next_cursor = cursor_encode(page[-1].id) if has_more and page else None
         return LedgerResponse(items=items, next_cursor=next_cursor, has_more=has_more)
+
+    async def freeze_funds(
+        self,
+        db: AsyncSession,
+        user_id: str,
+        amount: int,
+        ref_type: str,
+        ref_id: str,
+        description: str,
+    ) -> tuple[Account, LedgerEntry]:
+        """Freeze funds for an order. Caller must manage transaction."""
+        return await self._repo.freeze_funds(db, user_id, amount, ref_type, ref_id, description)
+
+    async def unfreeze_funds(
+        self,
+        db: AsyncSession,
+        user_id: str,
+        amount: int,
+        ref_type: str,
+        ref_id: str,
+        description: str,
+    ) -> tuple[Account, LedgerEntry]:
+        """Unfreeze funds when order is cancelled. Caller must manage transaction."""
+        return await self._repo.unfreeze_funds(db, user_id, amount, ref_type, ref_id, description)
+
+    async def get_or_create_position(
+        self, db: AsyncSession, user_id: str, market_id: str
+    ) -> Position:
+        """Get or create position row. Caller must manage transaction."""
+        return await self._repo.get_or_create_position(db, user_id, market_id)
+
+    async def freeze_yes_position(
+        self, db: AsyncSession, user_id: str, market_id: str, quantity: int
+    ) -> Position:
+        """Freeze YES shares for a sell order. Caller must manage transaction."""
+        return await self._repo.freeze_yes_position(db, user_id, market_id, quantity)
+
+    async def unfreeze_yes_position(
+        self, db: AsyncSession, user_id: str, market_id: str, quantity: int
+    ) -> Position:
+        """Unfreeze YES shares when order is cancelled. Caller must manage transaction."""
+        return await self._repo.unfreeze_yes_position(db, user_id, market_id, quantity)
+
+    async def freeze_no_position(
+        self, db: AsyncSession, user_id: str, market_id: str, quantity: int
+    ) -> Position:
+        """Freeze NO shares for a sell order. Caller must manage transaction."""
+        return await self._repo.freeze_no_position(db, user_id, market_id, quantity)
+
+    async def unfreeze_no_position(
+        self, db: AsyncSession, user_id: str, market_id: str, quantity: int
+    ) -> Position:
+        """Unfreeze NO shares when order is cancelled. Caller must manage transaction."""
+        return await self._repo.unfreeze_no_position(db, user_id, market_id, quantity)

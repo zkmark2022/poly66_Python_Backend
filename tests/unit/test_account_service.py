@@ -3,8 +3,6 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from src.pm_account.application.schemas import (
     BalanceResponse,
     DepositResponse,
