@@ -7,7 +7,6 @@ import json
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 _INSERT_LEDGER_SQL = text("""
     INSERT INTO ledger_entries
         (user_id, entry_type, amount, balance_after, reference_type, reference_id)

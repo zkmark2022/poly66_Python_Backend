@@ -16,14 +16,12 @@
 
 | 章节 | 模块 | 状态 | 主要问题数 |
 |------|------|------|-----------|
-| A | pm_risk (5个规则) | PENDING | — |
-| B | pm_matching (OrderBook + Algo + Scenario) | PENDING | — |
-| C | pm_clearing Part 1 (fee + ledger + WAL + MINT + TRANSFER) | PENDING | — |
-| D | pm_clearing Part 2 (BURN + netting + invariants + settlement) | PENDING | — |
-| E | pm_order (domain + transformer + repo + service + API) | PENDING | — |
-| F | 跨模块一致性 (错误码 + 事务边界 + enum 对齐) | PENDING | — |
-
-**说明**：章节 A、B、C/D、E 相互独立，可并行。章节 F 依赖 A-E 完成。
+| A | pm_risk (5个规则) | ✅ PASS | 0 |
+| B | pm_matching (OrderBook + Algo + Scenario) | ✅ PASS | 1 minor |
+| C | pm_clearing Part 1 (fee + ledger + WAL + MINT + TRANSFER_YES) | ✅ FIXED | 1 critical fixed |
+| D | pm_clearing Part 2 (BURN + netting + invariants + settlement) | ✅ PASS | 0 |
+| E | pm_order (domain + transformer + repo + service + API) | ✅ FIXED | 1 critical fixed |
+| F | 跨模块一致性 (错误码 + 事务边界 + enum 对齐) | ✅ PASS | 0 |
 
 ---
 
@@ -53,18 +51,18 @@
 - `src/pm_common/errors.py`（错误码对照）
 
 **检查项**：
-- [ ] 价格范围：1-99 是否正确
-- [ ] 数量限制：MAX_ORDER_QUANTITY 是否与设计一致
-- [ ] 市场状态：错误码 3001/3002 是否正确
-- [ ] 余额冻结：BUY 冻结公式 `original_price * qty + ceil_fee` 是否正确
-- [ ] 仓位冻结：卖单 YES/NO shares 冻结逻辑是否正确
-- [ ] TAKER_FEE_BPS=20：天花板除法 `(value * 20 + 9999) // 10000`
+- [x] 价格范围：1-99 是否正确 — `check_price_range`: `1 <= price <= 99` ✅
+- [x] 数量限制：MAX_ORDER_QUANTITY 是否与设计一致 — `MAX_ORDER_QUANTITY = 100_000` ✅
+- [x] 市场状态：错误码 3001/3002 是否正确 — `MarketNotFoundError(3001)`, `MarketNotActiveError(3002)` ✅
+- [x] 余额冻结：BUY 冻结公式 `original_price * qty + ceil_fee` 是否正确 — `trade_value + _calc_max_fee(trade_value)` ✅
+- [x] 仓位冻结：卖单 YES/NO shares 冻结逻辑是否正确 — NATIVE_SELL 冻结 `yes_pending_sell`；SYNTHETIC_BUY 冻结 `no_pending_sell` ✅
+- [x] TAKER_FEE_BPS=20：天花板除法 `(value * 20 + 9999) // 10000` ✅
 
-**状态**：PENDING
+**状态**：✅ PASS — 无问题
 
 **审查结果**：
 
-（待填写）
+所有 5 个风控规则逻辑正确，错误码与 errors.py 完全一致。SYNTHETIC_SELL（Buy NO）与 NATIVE_BUY 走同一冻结分支（冻结 FUNDS），逻辑正确。
 
 ---
 
@@ -80,18 +78,18 @@
 - `03_撮合引擎与清算流程设计.md` §2（单边订单簿设计）、§3（撮合算法）
 
 **检查项**：
-- [ ] OrderBook：100 个价格槽，bids/asks 的 add/cancel 逻辑
-- [ ] 最优价刷新：best_bid/best_ask 更新逻辑
-- [ ] 4 种 scenario 判断矩阵是否与设计一致
-- [ ] 撮合算法：BUY 匹配 asks（最低 ask ≤ book_price），SELL 匹配 bids（最高 bid ≥ book_price）
-- [ ] 自我交易跳过：`deque.rotate(-1)` + `checked < total` 计数器
-- [ ] TradeResult 字段完整性（buy_order_id, sell_order_id, price, qty, buy_user_id, sell_user_id, buy_book_type, sell_book_type, buy_original_price）
+- [x] OrderBook：100 个价格槽，bids/asks 的 add/cancel 逻辑 ✅
+- [x] 最优价刷新：best_bid/best_ask 更新逻辑 ✅ (`_refresh_best_bid` 从 99 向下扫，`_refresh_best_ask` 从 1 向上扫)
+- [x] 4 种 scenario 判断矩阵是否与设计一致 ✅
+- [x] 撮合算法：BUY 匹配 asks（`best_ask <= book_price`），SELL 匹配 bids（`best_bid >= book_price`）✅
+- [x] 自我交易跳过：`deque.rotate(-1)` + `checked < total` 计数器 ✅
+- [x] TradeResult 字段完整性 ✅（buy_order_id, sell_order_id, price, qty, buy_user_id, sell_user_id, buy_book_type, sell_book_type, buy_original_price, maker_order_id, taker_order_id）
 
-**状态**：PENDING
+**状态**：✅ PASS（1 个 minor 发现，非阻塞）
 
 **审查结果**：
 
-（待填写）
+**Minor（非阻塞）**：`_make_trade_sell_incoming` 中 `buy_original_price=0`。当 sell 是 incoming（taker），resting BUY 的 `original_price` 未存入 `BookOrder`，导致 `buy_original_price=0`。这在 TRANSFER_NO/BURN 场景下会影响未来的费用计算（`fee.py: get_fee_trade_value(SYNTHETIC_SELL)` 使用此字段）。当前 MVP 不执行 per-trade 费用扣除，暂不阻塞。
 
 ---
 
@@ -108,20 +106,22 @@
 - `04_WAL预写日志与故障恢复设计.md`（WAL 结构）
 
 **检查项**：
-- [ ] fee.py：get_fee_trade_value 各 book_type 分支逻辑
-- [ ] fee.py：calc_fee 天花板除法
-- [ ] fee.py：calc_released_cost 比例释放公式
-- [ ] ledger.py：write_ledger SQL 参数名是否与 ledger_entries 表列名一致
-- [ ] ledger.py：write_wal_event SQL 参数名是否与 wal_events 表列名一致
-- [ ] MINT：reserve += qty*100, yes_shares += qty, no_shares += qty
-- [ ] MINT：buyer 得 YES（credit yes_volume += qty），seller 得 NO（credit no_volume += qty）
-- [ ] TRANSFER_YES：reserve 不变，卖方 yes_volume 减少，买方 yes_volume 增加
+- [x] fee.py：get_fee_trade_value 各 book_type 分支逻辑 ✅
+- [x] fee.py：calc_fee 天花板除法 ✅
+- [x] fee.py：calc_released_cost 比例释放公式 ✅（`qty >= volume` 时返回全部，防止 dust）
+- [x] ledger.py：write_ledger SQL 参数名与 ledger_entries 表列名一致 ✅（`description` 可选，nullable）
+- [x] ledger.py：write_wal_event SQL 参数名与 wal_events 表列名一致 ✅（**已修复**）
+- [x] MINT：reserve += qty*100, yes_shares += qty, no_shares += qty ✅
+- [x] MINT：buyer 得 YES（credit yes_volume += qty），seller 得 NO（credit no_volume += qty）✅
+- [x] TRANSFER_YES：reserve 不变，卖方 yes_volume 减少，买方 yes_volume 增加 ✅
 
-**状态**：PENDING
+**状态**：✅ FIXED
 
 **审查结果**：
 
-（待填写）
+**CRITICAL（已修复 commit 8ed7584）**：`write_wal_event` SQL 试图插入 `order_id`、`user_id`、`id` 三个不存在于 `wal_events` 表的列。`wal_events` 表实际列为 `(id BIGSERIAL, market_id, event_type, payload, created_at)`，`order_id/user_id` 存储于 payload JSONB（有 GIN 索引）。修复：改为 `INSERT INTO wal_events (market_id, event_type, payload)`，把 `order_id/user_id` 合并进 payload JSON。
+
+**MVP TODO（不阻塞）**：fee.py 函数存在但未被撮合/清算链路调用。冻结额度正确覆盖了最大手续费，但实际手续费从未作为平台收入单独记账。`ledger_entries` 里的 MINT_COST、FEE 等类型目前未被写入。
 
 ---
 
@@ -139,19 +139,19 @@
 - `03_撮合引擎与清算流程设计.md` §4、§6（净额结算）、§7（不变量）、§9（市场结算）
 
 **检查项**：
-- [ ] TRANSFER_NO：mirror of TRANSFER_YES，操作 NO 仓位
-- [ ] BURN：reserve -= qty*100，yes/no shares 各减少
-- [ ] service.py：scenario dispatch 是否与 determine_scenario 一致
-- [ ] netting.py：`min(available_yes, available_no) * 100` 退款公式
-- [ ] netting.py：position FOR UPDATE 是否防并发
-- [ ] invariants.py：INV-1/2/3 三个断言 SQL 是否正确
-- [ ] settlement.py：settle_market 各阶段逻辑
+- [x] TRANSFER_NO：mirror of TRANSFER_YES，操作 NO 仓位 ✅
+- [x] BURN：reserve -= qty*100，yes/no shares 各减少，两侧卖家各拿 proceeds ✅
+- [x] service.py：scenario dispatch 与 determine_scenario 一致 ✅
+- [x] netting.py：`min(available_yes, available_no) * 100` 退款公式 ✅
+- [x] netting.py：position FOR UPDATE 防并发 ✅
+- [x] invariants.py：INV-1/2/3 三个断言 SQL 正确 ✅（INV-3 用 DB 聚合 cost_sum）
+- [x] settlement.py：settle_market 各阶段逻辑 ✅
 
-**状态**：PENDING
+**状态**：✅ PASS — 无问题
 
 **审查结果**：
 
-（待填写）
+transfer_no.py 是 transfer_yes.py 的 NO 镜像，逻辑正确（`no_trade_price = 100 - trade.price` 转换）。burn.py 正确销毁 YES+NO 对并释放 reserve。netting 使用 `FOR UPDATE` 锁行防并发。三个不变量检查逻辑正确。
 
 ---
 
@@ -171,37 +171,61 @@
 - `03_撮合引擎与清算流程设计.md` §1（下单入口流程）
 
 **检查项**：
-- [ ] transformer.py：4 种转换矩阵（YES BUY→NATIVE_BUY, YES SELL→NATIVE_SELL, NO BUY→SYNTHETIC_SELL, NO SELL→SYNTHETIC_BUY）
-- [ ] persistence.py：INSERT/UPDATE/SELECT SQL 列名与 orders 表 schema 一致
-- [ ] schemas.py：PlaceOrderRequest 字段与 API 契约一致
-- [ ] service.py：幂等性检查逻辑（4005 错误码）
-- [ ] service.py：Order 对象构造是否完整
-- [ ] router.py：HTTP method、status code、路由路径与设计文档一致
+- [x] transformer.py：4 种转换矩阵 ✅
+- [x] persistence.py：INSERT/UPDATE/SELECT SQL 列名与 orders 表 schema 一致 ✅
+- [x] schemas.py：PlaceOrderRequest 字段与 API 契约一致 ✅
+- [x] service.py：幂等性检查逻辑（4005 错误码）✅
+- [x] service.py：Order 对象构造完整 ✅
+- [x] router.py：HTTP method、status code、路由路径与设计文档一致 ✅
 
-**状态**：PENDING
+**状态**：✅ FIXED
 
 **审查结果**：
 
-（待填写）
+**CRITICAL（已修复 commit 8ed7584）**：`orders.id` 列是 UUID 类型，但 `generate_id()` 生成的是 snowflake 整数字符串（如 `"426827034521600"`），不是合法 UUID 格式，每次 INSERT 都会触发 `invalid input syntax for type uuid`。修复：添加迁移 `010_alter_orders_id_to_varchar.py`，将 `orders.id` 改为 `VARCHAR(64)`。
+
+`remaining_quantity` 是 `field(init=False)` 在 `__post_init__` 中由 `quantity - filled_quantity` 计算，row mapper 不传此字段，正确。
 
 ---
 
 ## Chapter F：跨模块一致性
 
 **检查项**：
-- [ ] 所有错误码与 `src/pm_common/errors.py` 中的定义一致
-- [ ] 所有 enum 值与 `src/pm_common/enums.py` 中的定义一致
-- [ ] MatchingEngine 链路中的函数签名调用顺序
-- [ ] WAL event_type 字符串与设计文档约定一致
+- [x] 所有错误码与 `src/pm_common/errors.py` 中的定义一致 ✅
+- [x] 所有 enum 值与 `src/pm_common/enums.py` 中的定义一致 ✅（BookType、TradeScenario、OrderStatus 均使用 StrEnum）
+- [x] MatchingEngine 链路中的函数签名调用顺序 ✅（risk check → transform → freeze → save → WAL → market lock → match → clear → netting → finalize → invariant → flush market）
+- [x] WAL event_type 字符串与设计文档约定一致 ✅（ORDER_ACCEPTED/MATCHED/PARTIALLY_FILLED/CANCELLED/EXPIRED 均在 migration constraint 中）
 
-**状态**：PENDING
+**状态**：✅ PASS
 
 **审查结果**：
 
-（待填写）
+所有错误码与 errors.py 一致。WAL event_type 字符串与 migration 009 的 CHECK constraint 完全匹配。事务边界正确：engine 用 `async with db.begin()`（在 autobegin session 中创建 SAVEPOINT，出错自动回滚），service 层显式 `commit()`（与 pm_account 模式一致）。
+
+**Style Note**：pm_order 分页 cursor 使用原始 snowflake ID 字符串，而 pm_account 使用 base64-encoded JSON。两者功能都正确，但风格不一致，可在 Phase 2 统一。
 
 ---
 
 ## 最终结论
 
-（待填写）
+**审查完成**。共发现并修复 **2 个 Critical Bug**：
+
+| Bug | 文件 | 修复 commit |
+|-----|------|------------|
+| `write_wal_event` SQL 插入不存在的列（`order_id`, `user_id`, `id`） | `src/pm_clearing/infrastructure/ledger.py` | `8ed7584` |
+| `orders.id` 为 UUID 类型但代码使用 snowflake 字符串 ID | `alembic/versions/010_alter_orders_id_to_varchar.py` | `8ed7584` |
+
+**预先修复的 2 个 Bug**（commit `903c658`）：
+
+| Bug | 文件 |
+|-----|------|
+| `_INSERT_ORDER_SQL` 缺少 `price_type` 列名 | `src/pm_order/infrastructure/persistence.py` |
+| 事务从不提交（`async with db.begin()` 创建 SAVEPOINT 而非真实事务） | `src/pm_order/application/service.py` |
+
+**非阻塞 MVP TODO**：
+
+1. Fee collection 未实现：`fee.py` 函数存在但未被调用。冻结额度已覆盖最大手续费，但手续费不作为平台收入记账，`ledger_entries` 里 FEE/MINT_COST 等条目从未写入。
+2. `buy_original_price=0` 当 SELL 是 taker：resting BUY 的 original_price 未存于 BookOrder，影响未来 TRANSFER_NO 场景的 buy 侧手续费计算。
+3. 分页 cursor 风格不一致（pm_order 用 raw ID，pm_account 用 base64 JSON）。
+
+**结论：代码可以进入 DB 集成测试阶段。** 需先运行 `alembic upgrade head` 应用迁移 010，再跑集成测试。
