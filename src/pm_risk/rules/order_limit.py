@@ -1,6 +1,6 @@
 from src.pm_common.errors import OrderLimitExceededError
 
-MAX_ORDER_QUANTITY = 100_000
+MAX_ORDER_QUANTITY = 10_000
 
 
 def check_order_limit(quantity: int) -> None:
