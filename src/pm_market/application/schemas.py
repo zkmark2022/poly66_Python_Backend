@@ -205,7 +205,7 @@ class MarketDetail(BaseModel):
         def _iso(dt: object) -> str | None:
             if dt is None:
                 return None
-            return dt.isoformat()  # type: ignore[attr-defined]
+            return dt.isoformat()  # type: ignore[attr-defined,no-any-return]
 
         return cls(
             id=m.id,
