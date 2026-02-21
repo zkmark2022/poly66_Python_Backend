@@ -7,22 +7,22 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    # Database
+    # Database (defaults match docker-compose.yml for local dev)
     DATABASE_URL: str = (
         "postgresql+asyncpg://pm_user:pm_pass@localhost:5432/prediction_market"
     )
 
-    # Redis
+    # Redis (defaults match docker-compose.yml for local dev)
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # JWT
-    JWT_SECRET: str = "change-me-in-production"
+    # JWT — no default, MUST be set in .env
+    JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 30
 
     # App
     APP_NAME: str = "Prediction Market"
-    DEBUG: bool = False
+    DEBUG: bool = False  # Safe default for production; set DEBUG=True in .env for local dev
 
 
 settings = Settings()
