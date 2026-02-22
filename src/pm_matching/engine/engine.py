@@ -7,19 +7,26 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.pm_clearing.domain.fee import calc_fee, get_fee_trade_value
 from src.pm_clearing.domain.invariants import verify_invariants_after_trade
 from src.pm_clearing.domain.netting import execute_netting_if_needed
 from src.pm_clearing.domain.service import settle_trade
+from src.pm_clearing.infrastructure.fee_collector import (
+    collect_fee_from_frozen,
+    collect_fee_from_proceeds,
+)
 from src.pm_clearing.infrastructure.ledger import write_wal_event
+from src.pm_clearing.infrastructure.trades_writer import write_trade
 from src.pm_common.datetime_utils import utc_now
 from src.pm_common.errors import AppError
 from src.pm_matching.domain.models import TradeResult
 from src.pm_matching.engine.matching_algo import match_order
 from src.pm_matching.engine.order_book import OrderBook
+from src.pm_matching.engine.scenario import determine_scenario
 from src.pm_order.domain.models import Order
 from src.pm_order.domain.repository import OrderRepositoryProtocol
 from src.pm_order.domain.transformer import transform_order
-from src.pm_risk.rules.balance_check import TAKER_FEE_BPS, _calc_max_fee, check_and_freeze
+from src.pm_risk.rules.balance_check import _calc_max_fee, check_and_freeze
 from src.pm_risk.rules.market_status import check_market_active
 from src.pm_risk.rules.order_limit import check_order_limit
 from src.pm_risk.rules.price_range import check_price_range
@@ -152,11 +159,30 @@ class MatchingEngine:
         trades_db: list[TradeResult] = []
         netting_qty = 0
         for tr in trade_results:
-            await settle_trade(tr, market, db, fee_bps=TAKER_FEE_BPS)
+            buy_pnl, sell_pnl = await settle_trade(tr, market, db, fee_bps=market.taker_fee_bps)
             _sync_frozen_amount(order, order.remaining_quantity)
             await repo.update_status(order, db)
             # Update maker order status in DB
             await _update_maker_status(tr, repo, db)
+
+            # Fee collection
+            taker_is_buyer = tr.taker_order_id == tr.buy_order_id
+            taker_book_type = tr.buy_book_type if taker_is_buyer else tr.sell_book_type
+            taker_user_id = tr.buy_user_id if taker_is_buyer else tr.sell_user_id
+            fee_base = get_fee_trade_value(
+                taker_book_type, tr.price, tr.quantity, tr.buy_original_price
+            )
+            actual_fee = calc_fee(fee_base, market.taker_fee_bps)
+            max_fee = _calc_max_fee(fee_base)
+            if taker_book_type in ("NATIVE_BUY", "SYNTHETIC_SELL"):
+                await collect_fee_from_frozen(taker_user_id, actual_fee, max_fee, db)
+            else:
+                await collect_fee_from_proceeds(taker_user_id, actual_fee, db)
+
+            # Persist trade
+            scenario_val = determine_scenario(tr.buy_book_type, tr.sell_book_type)
+            await write_trade(tr, scenario_val.value, 0, actual_fee, buy_pnl, sell_pnl, db)
+
             # Netting for buyer
             nq = await execute_netting_if_needed(tr.buy_user_id, order.market_id, market, db)
             netting_qty += nq
