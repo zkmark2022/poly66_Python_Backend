@@ -15,7 +15,7 @@ from src.pm_clearing.infrastructure.fee_collector import (
     collect_fee_from_frozen,
     collect_fee_from_proceeds,
 )
-from src.pm_clearing.infrastructure.ledger import write_wal_event
+from src.pm_clearing.infrastructure.ledger import write_ledger, write_wal_event
 from src.pm_clearing.infrastructure.trades_writer import write_trade
 from src.pm_common.datetime_utils import utc_now
 from src.pm_common.errors import AppError
@@ -263,6 +263,15 @@ class MatchingEngine:
                     WHERE user_id=:user_id
                 """),
                 {"user_id": order.user_id, "amount": order.frozen_amount},
+            )
+            await write_ledger(
+                user_id=order.user_id,
+                entry_type="ORDER_UNFREEZE",
+                amount=order.frozen_amount,
+                balance_after=0,
+                reference_type="ORDER",
+                reference_id=order.id,
+                db=db,
             )
         elif order.frozen_asset_type == "YES_SHARES":
             await db.execute(

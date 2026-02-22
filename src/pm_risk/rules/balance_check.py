@@ -1,6 +1,7 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.pm_clearing.infrastructure.ledger import write_ledger
 from src.pm_common.errors import InsufficientBalanceError, InsufficientPositionError
 from src.pm_order.domain.models import Order
 
@@ -54,6 +55,15 @@ async def check_and_freeze(order: Order, db: AsyncSession) -> None:
             raise InsufficientBalanceError(freeze_amount, 0)
         order.frozen_amount = freeze_amount
         order.frozen_asset_type = "FUNDS"
+        await write_ledger(
+            user_id=order.user_id,
+            entry_type="ORDER_FREEZE",
+            amount=-freeze_amount,
+            balance_after=0,
+            reference_type="ORDER",
+            reference_id=order.id,
+            db=db,
+        )
     elif order.book_type == "NATIVE_SELL":
         row = (
             await db.execute(
