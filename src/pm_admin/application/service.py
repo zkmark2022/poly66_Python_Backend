@@ -5,10 +5,16 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.pm_clearing.domain.global_invariants import verify_global_invariants
+from src.pm_clearing.domain.invariants import verify_invariants_after_trade
 from src.pm_clearing.domain.settlement import settle_market
 from src.pm_common.errors import AppError
 
 _GET_MARKET_SQL = text("SELECT id, status FROM markets WHERE id = :market_id")
+_LIST_ACTIVE_MARKETS_SQL = text(
+    "SELECT id, status, reserve_balance, pnl_pool, total_yes_shares, total_no_shares "
+    "FROM markets WHERE status = 'ACTIVE'"
+)
 _GET_OPEN_ORDERS_SQL = text("""
     SELECT id, user_id, frozen_amount, frozen_asset_type, remaining_quantity
     FROM orders
@@ -74,3 +80,28 @@ class AdminService:
             "outcome": outcome,
             "cancelled_orders": len(orders),
         }
+
+    async def verify_all_invariants(self, db: AsyncSession) -> dict[str, object]:
+        """Run per-market (INV-1/2/3) and global (INV-G) invariant checks."""
+        violations: list[str] = []
+        rows = (await db.execute(_LIST_ACTIVE_MARKETS_SQL)).fetchall()
+        for row in rows:
+            try:
+                ms = _MarketStateShim(row)
+                await verify_invariants_after_trade(ms, db)
+            except AssertionError as e:
+                violations.append(str(e))
+        global_violations = await verify_global_invariants(db)
+        violations.extend(global_violations)
+        return {"ok": len(violations) == 0, "violations": violations}
+
+
+class _MarketStateShim:
+    """Duck-typed MarketState for invariant checks (read-only, no fee fields needed)."""
+
+    def __init__(self, row: Any) -> None:
+        self.id: str = row.id
+        self.reserve_balance: int = row.reserve_balance
+        self.pnl_pool: int = row.pnl_pool
+        self.total_yes_shares: int = row.total_yes_shares
+        self.total_no_shares: int = row.total_no_shares

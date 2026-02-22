@@ -29,3 +29,12 @@ async def resolve_market(
 ) -> ApiResponse:
     result = await _service.resolve_market(market_id, body.outcome, db)
     return success_response(result)
+
+
+@router.post("/verify-invariants")
+async def verify_invariants(
+    current_user: Annotated[UserModel, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ApiResponse:
+    result = await _service.verify_all_invariants(db)
+    return success_response(result)
