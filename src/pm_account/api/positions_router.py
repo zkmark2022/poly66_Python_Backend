@@ -2,7 +2,7 @@
 """Positions REST API — 2 endpoints."""
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.pm_account.application.positions_schemas import (
@@ -11,6 +11,7 @@ from src.pm_account.application.positions_schemas import (
 )
 from src.pm_account.infrastructure.positions_repository import PositionsRepository
 from src.pm_common.database import get_db_session
+from src.pm_common.errors import AppError
 from src.pm_common.response import ApiResponse, success_response
 from src.pm_gateway.auth.dependencies import get_current_user
 from src.pm_gateway.user.db_models import UserModel
@@ -40,5 +41,5 @@ async def get_position(
 ) -> ApiResponse:
     pos = await _repo.get_by_market(str(current_user.id), market_id, db)
     if pos is None:
-        raise HTTPException(status_code=404, detail="Position not found")
+        raise AppError(3001, f"Position not found: {market_id}", http_status=404)
     return success_response(PositionResponse(**pos).model_dump())
