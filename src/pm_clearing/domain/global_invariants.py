@@ -19,12 +19,9 @@ _PLATFORM_FEE_SQL = text(
     "SELECT COALESCE(available_balance, 0) FROM accounts WHERE user_id = 'PLATFORM_FEE'"
 )
 _NET_DEPOSIT_SQL = text("""
-    SELECT COALESCE(SUM(
-        CASE WHEN entry_type = 'DEPOSIT' THEN amount
-             WHEN entry_type = 'WITHDRAW' THEN -amount
-             ELSE 0 END
-    ), 0)
+    SELECT COALESCE(SUM(amount), 0)
     FROM ledger_entries
+    WHERE entry_type IN ('DEPOSIT', 'WITHDRAW')
 """)
 
 
