@@ -11,7 +11,7 @@
 ```bash
 cp .env.example .env
 make up        # 启动 PG16 + Redis7
-make migrate   # 运行所有 11 条迁移（建表 + 种子数据）
+make migrate   # 运行所有 13 条迁移（建表 + 种子数据）
 make dev       # 启动开发服务器 → http://localhost:8000
 make test      # 运行测试
 ```
@@ -42,7 +42,12 @@ DEV_MVP/
 │   │   ├── 2026-02-20-pm-account-design.md   ← pm_account 设计文档（已完成）
 │   │   ├── 2026-02-20-pm-account-plan.md     ← pm_account 实施计划（已完成）
 │   │   ├── 2026-02-20-pm-market-design.md    ← pm_market 设计文档（已完成）
-│   │   └── 2026-02-20-pm-market-plan.md      ← pm_market 实施计划（已完成）
+│   │   ├── 2026-02-20-pm-market-plan.md      ← pm_market 实施计划（已完成）
+│   │   ├── 2026-02-21-pm-order-design.md     ← pm_order+risk+matching+clearing 设计文档（已完成）
+│   │   ├── 2026-02-21-pm-order-plan.md       ← pm_order 实施计划（已完成）
+│   │   ├── 2026-02-21-api-completion-plan.md ← API 补全计划（positions/trades/admin，已完成）
+│   │   ├── 2026-02-21-code-review.md         ← 全链路代码审查记录
+│   │   └── 2026-02-22-frontend-test-plan.md  ← 前端集成测试计划（Browser Use，7大块）
 │   ├── archive/                       ← v1~v3 历史版本（仅供参考）
 │   └── 参考资料_单账本撮合引擎设计方案_v1.md
 │
@@ -64,18 +69,36 @@ DEV_MVP/
 │   │   └── api/router.py              ← POST /auth/register|login|refresh
 │   ├── pm_account/                    ← 账户/持仓模块（Module 3，已完成）
 │   │   ├── domain/                    ← models / enums / events / repository / cache
-│   │   ├── infrastructure/            ← db_models / persistence
-│   │   ├── application/               ← schemas / service
-│   │   └── api/router.py              ← GET balance|ledger, POST deposit|withdraw
+│   │   ├── infrastructure/            ← db_models / persistence / positions_repository
+│   │   ├── application/               ← schemas / service / positions_schemas
+│   │   └── api/                       ← router.py (balance|ledger|deposit|withdraw)
+│   │       └── positions_router.py    ← GET /positions, GET /positions/{market_id}
 │   ├── pm_market/                     ← 话题模块（Module 4，已完成）
 │   │   ├── domain/                    ← models / repository
 │   │   ├── infrastructure/            ← db_models / persistence
 │   │   ├── application/               ← schemas / service
 │   │   └── api/router.py              ← GET /markets, /markets/{id}, /markets/{id}/orderbook
-│   ├── pm_order/                      ← 订单模块（待实现）
-│   ├── pm_risk/                       ← 风控模块（待实现）
-│   ├── pm_matching/                   ← 撮合引擎（待实现，最复杂）
-│   └── pm_clearing/                   ← 清算模块（待实现）
+│   ├── pm_risk/                       ← 风控模块（Module 5，已完成）
+│   │   └── rules/                     ← balance_check / market_status / order_limit / price_range / self_trade
+│   ├── pm_order/                      ← 订单模块（Module 5，已完成）
+│   │   ├── domain/                    ← models / repository / transformer
+│   │   ├── infrastructure/            ← persistence
+│   │   ├── application/               ← schemas / service
+│   │   └── api/router.py              ← POST /orders, GET /orders, POST /orders/{id}/cancel
+│   ├── pm_matching/                   ← 撮合引擎（Module 6，已完成）
+│   │   ├── domain/                    ← models (BookOrder / TradeResult)
+│   │   ├── engine/                    ← order_book / matching_algo / engine
+│   │   └── application/service.py     ← MatchingEngine singleton
+│   ├── pm_clearing/                   ← 清算模块（Module 7，已完成）
+│   │   ├── domain/                    ← scenarios (mint/burn/transfer_yes/transfer_no) / service / netting / invariants / global_invariants
+│   │   ├── infrastructure/            ← ledger / fee_collector / trades_writer / trades_repository
+│   │   ├── application/               ← trades_schemas
+│   │   └── api/trades_router.py       ← GET /trades
+│   └── pm_admin/                      ← 管理模块（Module 9，已完成）
+│       ├── application/service.py     ← resolve_market / verify_all_invariants / get_market_stats
+│       └── api/router.py              ← POST /admin/markets/{id}/resolve
+│                                         POST /admin/verify-invariants
+│                                         GET  /admin/markets/{id}/stats
 │
 ├── config/
 │   └── settings.py                    ← Pydantic Settings（读取 .env）
@@ -93,11 +116,13 @@ DEV_MVP/
 │       ├── 008_create_ledger_entries.py     ← BIGSERIAL，Append-Only
 │       ├── 009_create_wal_events.py
 │       ├── 010_create_circuit_breaker_events.py
-│       └── 011_seed_initial_data.py         ← SYSTEM_RESERVE / PLATFORM_FEE / 3 个样本话题
+│       ├── 011_seed_initial_data.py         ← SYSTEM_RESERVE / PLATFORM_FEE / 3 个样本话题
+│       ├── 012_alter_orders_id_to_varchar.py   ← orders.id UUID → VARCHAR(64)（snowflake ID）
+│       └── 013_alter_trades_order_ids_to_varchar.py ← trades 订单 ID 列 UUID → VARCHAR(64)
 │
 ├── tests/
 │   ├── conftest.py                    ← AsyncClient fixture
-│   ├── unit/                          ← 单元测试（共 182 个，全通过）
+│   ├── unit/                          ← 单元测试（共 292 个，全通过）
 │   ├── integration/                   ← 集成测试（auth / account / market flow）
 │   └── e2e/                           ← 待填充（Module 5+ 完成后）
 │
@@ -137,23 +162,37 @@ DEV_MVP/
 | **Module 2** | pm_gateway：注册 / 登录 / JWT | ✅ 完成 |
 | **Module 3** | pm_account：充值 / 余额 / 流水 | ✅ 完成 |
 | **Module 4** | pm_market：话题列表 / 订单簿快照 | ✅ 完成 |
-| **Module 5** | pm_risk + pm_order：下单 / 风控 / 撮合入口 | 🔲 待开始 |
-| **Module 6** | pm_matching：内存订单簿 + 撮合引擎 | 🔲 待开始 |
-| **Module 7** | pm_clearing：四种场景清算 + Netting | 🔲 待开始 |
-| **Module 8** | pm_order：持仓 / 成交记录查询 | 🔲 待开始 |
-| **Module 9** | Admin：裁决 / 不变量验证 | 🔲 待开始 |
+| **Module 5** | pm_risk + pm_order：下单 / 风控 / 撮合入口 | ✅ 完成 |
+| **Module 6** | pm_matching：内存订单簿 + 撮合引擎 | ✅ 完成 |
+| **Module 7** | pm_clearing：四种场景清算 + Netting | ✅ 完成 |
+| **Module 8** | pm_account/pm_clearing：持仓 / 成交记录查询 | ✅ 完成 |
+| **Module 9** | pm_admin：裁决 / 不变量验证 / 统计 | ✅ 完成 |
 
 ### 当前状态快照
 
 ```
-测试：182 通过（make test）
+测试：292 通过（make test）
 Lint：ruff 零报错（make lint）
-类型：mypy 严格模式零报错（73 文件，make typecheck）
-数据库：11 条迁移全部可 downgrade → upgrade（全周期验证）
+类型：mypy 严格模式零报错（116 文件，make typecheck）
+数据库：13 条迁移全部应用（全周期验证）
 种子数据：SYSTEM_RESERVE / PLATFORM_FEE / 3 个样本市场
-认证：POST /api/v1/auth/register|login|refresh 全部可用
-账户：GET /api/v1/account/balance|ledger, POST /api/v1/account/deposit|withdraw 全部可用
-话题：GET /api/v1/markets, GET /api/v1/markets/{id}, GET /api/v1/markets/{id}/orderbook 全部可用
+
+已上线 API（全部可用）：
+  认证：  POST /api/v1/auth/register|login|refresh
+  账户：  GET  /api/v1/account/balance|ledger
+          POST /api/v1/account/deposit|withdraw
+  持仓：  GET  /api/v1/positions
+          GET  /api/v1/positions/{market_id}
+  市场：  GET  /api/v1/markets
+          GET  /api/v1/markets/{id}
+          GET  /api/v1/markets/{id}/orderbook
+  订单：  POST /api/v1/orders
+          GET  /api/v1/orders
+          POST /api/v1/orders/{id}/cancel
+  成交：  GET  /api/v1/trades
+  管理：  POST /api/v1/admin/markets/{id}/resolve
+          POST /api/v1/admin/verify-invariants
+          GET  /api/v1/admin/markets/{id}/stats
 ```
 
 ---
@@ -207,8 +246,8 @@ git stash list            # 是否有 stash
 工作目录：/Users/pangpanghu007/Documents/Python_Project/predict_market/DEV_MVP
 设计文档在 Planning/Detail_Design/（先读 README.md）
 主计划在 Planning/预测市场平台_完整实施计划_v4_Python.md
-当前完成到 Module 1（脚手架 + pm_common），下一步是 Module 2（pm_gateway 认证模块）。
-上次实施计划：Planning/Implementation/2026-02-20-scaffolding-plan.md
+当前完成到 Module 9（全部后端 API 已上线），正在进行前端集成测试。
+最新实施计划：Planning/Implementation/2026-02-22-frontend-test-plan.md
 ```
 
 ---
@@ -303,7 +342,7 @@ make migration MSG="describe change"  # 生成新迁移
 | 迁移 | Alembic | ≥1.13 |
 | 数据校验 | Pydantic v2 | ≥2.5 |
 | 认证 | python-jose (JWT) | ≥3.3 |
-| 密码哈希 | passlib[bcrypt] | ≥1.7 |
+| 密码哈希 | bcrypt | ≥4.0 |
 | 测试 | pytest + pytest-asyncio | ≥8.0 |
 | HTTP 测试 | httpx | ≥0.26 |
 | Lint | ruff | ≥0.2 |
@@ -311,4 +350,4 @@ make migration MSG="describe change"  # 生成新迁移
 
 ---
 
-*最后更新: 2026-02-20 — Module 0 + Module 1 + Module 2 + Module 3 + Module 4 完成*
+*最后更新: 2026-02-22 — Module 0~9 全部完成，MVP 后端 API 完整上线，前端集成测试进行中*
