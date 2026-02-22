@@ -39,6 +39,15 @@ _UNFREEZE_NO_SQL = text("""
     UPDATE positions SET no_pending_sell = no_pending_sell - :qty, updated_at = NOW()
     WHERE user_id = :user_id AND market_id = :market_id
 """)
+_STATS_SQL = text("""
+    SELECT
+        COUNT(*) AS total_trades,
+        COALESCE(SUM(quantity), 0) AS total_volume,
+        COALESCE(SUM(taker_fee + maker_fee), 0) AS total_fees,
+        COUNT(DISTINCT buy_user_id) + COUNT(DISTINCT sell_user_id) AS unique_traders
+    FROM trades
+    WHERE market_id = :market_id
+""")
 
 
 class AdminService:
@@ -79,6 +88,20 @@ class AdminService:
             "market_id": market_id,
             "outcome": outcome,
             "cancelled_orders": len(orders),
+        }
+
+    async def get_market_stats(self, market_id: str, db: AsyncSession) -> dict[str, Any]:
+        row = (await db.execute(_GET_MARKET_SQL, {"market_id": market_id})).fetchone()
+        if row is None:
+            raise AppError(3001, "Market not found", http_status=404)
+        stats = (await db.execute(_STATS_SQL, {"market_id": market_id})).fetchone()
+        return {
+            "market_id": market_id,
+            "status": row.status,
+            "total_trades": stats.total_trades if stats else 0,
+            "total_volume": int(stats.total_volume) if stats else 0,
+            "total_fees": int(stats.total_fees) if stats else 0,
+            "unique_traders": int(stats.unique_traders) if stats else 0,
         }
 
     async def verify_all_invariants(self, db: AsyncSession) -> dict[str, object]:

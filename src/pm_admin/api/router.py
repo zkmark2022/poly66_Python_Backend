@@ -31,6 +31,16 @@ async def resolve_market(
     return success_response(result)
 
 
+@router.get("/markets/{market_id}/stats")
+async def get_market_stats(
+    market_id: str,
+    current_user: Annotated[UserModel, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ApiResponse:
+    result = await _service.get_market_stats(market_id, db)
+    return success_response(result)
+
+
 @router.post("/verify-invariants")
 async def verify_invariants(
     current_user: Annotated[UserModel, Depends(get_current_user)],
