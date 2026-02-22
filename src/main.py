@@ -19,6 +19,7 @@ from sqlalchemy import text
 from config.settings import settings
 from src.pm_account.api.positions_router import router as positions_router
 from src.pm_account.api.router import router as account_router
+from src.pm_clearing.api.trades_router import router as trades_router
 from src.pm_common.database import engine
 from src.pm_common.errors import AppError
 from src.pm_common.redis_client import close_redis, get_redis
@@ -66,6 +67,7 @@ app.include_router(account_router, prefix="/api/v1")
 app.include_router(positions_router, prefix="/api/v1")
 app.include_router(market_router, prefix="/api/v1")
 app.include_router(order_router, prefix="/api/v1")
+app.include_router(trades_router, prefix="/api/v1")
 
 
 @app.get("/health")
