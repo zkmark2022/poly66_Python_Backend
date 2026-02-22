@@ -57,33 +57,44 @@ class AdminService:
         row = (await db.execute(_GET_MARKET_SQL, {"market_id": market_id})).fetchone()
         if row is None:
             raise AppError(3001, "Market not found", http_status=404)
-        if row.status != "ACTIVE":
+        if row.status not in ("ACTIVE", "SUSPENDED"):
             raise AppError(
-                3002, f"Market is not ACTIVE (status={row.status})", http_status=422
+                3002,
+                f"Market cannot be resolved (status={row.status})",
+                http_status=422,
             )
 
-        orders = (
-            await db.execute(_GET_OPEN_ORDERS_SQL, {"market_id": market_id})
-        ).fetchall()
-        for o in orders:
-            await db.execute(_CANCEL_ORDER_SQL, {"order_id": o.id})
-            if o.frozen_asset_type == "FUNDS":
-                await db.execute(
-                    _UNFREEZE_FUNDS_SQL,
-                    {"user_id": o.user_id, "amount": o.frozen_amount},
-                )
-            elif o.frozen_asset_type == "YES_SHARES":
-                await db.execute(
-                    _UNFREEZE_YES_SQL,
-                    {"user_id": o.user_id, "market_id": market_id, "qty": o.remaining_quantity},
-                )
-            else:
-                await db.execute(
-                    _UNFREEZE_NO_SQL,
-                    {"user_id": o.user_id, "market_id": market_id, "qty": o.remaining_quantity},
-                )
+        try:
+            orders = (
+                await db.execute(_GET_OPEN_ORDERS_SQL, {"market_id": market_id})
+            ).fetchall()
+            for o in orders:
+                await db.execute(_CANCEL_ORDER_SQL, {"order_id": o.id})
+                if o.frozen_asset_type == "FUNDS":
+                    await db.execute(
+                        _UNFREEZE_FUNDS_SQL,
+                        {"user_id": o.user_id, "amount": o.frozen_amount},
+                    )
+                elif o.frozen_asset_type == "YES_SHARES":
+                    await db.execute(
+                        _UNFREEZE_YES_SQL,
+                        {"user_id": o.user_id, "market_id": market_id, "qty": o.remaining_quantity},
+                    )
+                else:
+                    await db.execute(
+                        _UNFREEZE_NO_SQL,
+                        {"user_id": o.user_id, "market_id": market_id, "qty": o.remaining_quantity},
+                    )
 
-        await settle_market(market_id, outcome, db)
+            await settle_market(market_id, outcome, db)
+            await db.commit()
+        except AppError:
+            await db.rollback()
+            raise
+        except Exception:
+            await db.rollback()
+            raise
+
         return {
             "market_id": market_id,
             "outcome": outcome,

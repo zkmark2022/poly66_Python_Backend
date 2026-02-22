@@ -1,6 +1,6 @@
 # src/pm_admin/api/router.py
 """Admin REST API."""
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -17,7 +17,7 @@ _service = AdminService()
 
 
 class ResolveRequest(BaseModel):
-    outcome: str
+    outcome: Literal["YES", "NO"]  # MVP TODO: VOID settlement not yet implemented
 
 
 @router.post("/markets/{market_id}/resolve")
