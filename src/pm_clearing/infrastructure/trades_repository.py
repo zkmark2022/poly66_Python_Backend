@@ -18,7 +18,7 @@ _LIST_SQL = text("""
     FROM trades
     WHERE (buy_user_id = :user_id OR sell_user_id = :user_id)
       AND (CAST(:market_id AS TEXT) IS NULL OR market_id = :market_id)
-      AND (:cursor_id IS NULL OR trade_id < :cursor_id)
+      AND (CAST(:cursor_id AS TEXT) IS NULL OR trade_id < :cursor_id)
     ORDER BY executed_at DESC, trade_id DESC
     LIMIT :limit
 """)
