@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from config.settings import settings
+from src.pm_account.api.positions_router import router as positions_router
 from src.pm_account.api.router import router as account_router
 from src.pm_common.database import engine
 from src.pm_common.errors import AppError
@@ -62,6 +63,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(account_router, prefix="/api/v1")
+app.include_router(positions_router, prefix="/api/v1")
 app.include_router(market_router, prefix="/api/v1")
 app.include_router(order_router, prefix="/api/v1")
 
