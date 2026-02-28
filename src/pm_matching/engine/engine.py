@@ -298,6 +298,287 @@ class MatchingEngine:
                 },
             )
 
+    async def _cancel_order_by_row(self, row: Any, db: AsyncSession) -> None:
+        """Cancel an order using a raw DB row (from SELECT FOR UPDATE).
+
+        Removes from in-memory orderbook and unfreezes assets in DB.
+        """
+        market_id = str(row.market_id)
+        order_id = str(row.id)
+
+        # Remove from in-memory orderbook (safe if not present)
+        ob = self._get_or_create_orderbook(market_id)
+        ob.cancel_order(order_id)
+
+        # Unfreeze assets
+        if str(row.frozen_asset_type) == "FUNDS":
+            await db.execute(
+                text("""
+                    UPDATE accounts SET available_balance=available_balance+:amt,
+                    frozen_balance=frozen_balance-:amt, version=version+1, updated_at=NOW()
+                    WHERE user_id=:uid
+                """),
+                {"uid": str(row.user_id), "amt": row.frozen_amount},
+            )
+            await write_ledger(
+                user_id=str(row.user_id),
+                entry_type="ORDER_UNFREEZE",
+                amount=row.frozen_amount,
+                balance_after=0,
+                reference_type="ORDER",
+                reference_id=order_id,
+                db=db,
+            )
+        elif str(row.frozen_asset_type) == "YES_SHARES":
+            await db.execute(
+                text(
+                    "UPDATE positions SET yes_pending_sell=yes_pending_sell-:qty,"
+                    " updated_at=NOW() WHERE user_id=:uid AND market_id=:mid"
+                ),
+                {"uid": str(row.user_id), "mid": market_id, "qty": row.frozen_amount},
+            )
+        else:  # NO_SHARES
+            await db.execute(
+                text(
+                    "UPDATE positions SET no_pending_sell=no_pending_sell-:qty,"
+                    " updated_at=NOW() WHERE user_id=:uid AND market_id=:mid"
+                ),
+                {"uid": str(row.user_id), "mid": market_id, "qty": row.frozen_amount},
+            )
+
+        # Mark order CANCELLED in DB
+        await db.execute(
+            text("UPDATE orders SET status='CANCELLED', updated_at=NOW() WHERE id=:oid"),
+            {"oid": order_id},
+        )
+
+    async def replace_order(
+        self, old_order_id: str, new_order_params: Any, user_id: str, db: AsyncSession
+    ) -> dict:
+        """Atomic Replace: cancel old order + place new order in a single transaction.
+
+        See interface contract v1.4 §3.1.
+
+        Error codes:
+        - 6002: old order not found
+        - 6004: old order not owned by user_id
+        - 6003: old order already fully filled
+        - 6001: old order partially filled (cancel remainder, reject new)
+        - 6005: new order market_id != old order market_id
+        """
+        # Step 1: Load old order (row-level lock)
+        old_result = await db.execute(
+            text(
+                "SELECT id, user_id, status, filled_quantity, remaining_quantity,"
+                " market_id, frozen_amount, frozen_asset_type, quantity"
+                " FROM orders WHERE id = :oid FOR UPDATE"
+            ),
+            {"oid": old_order_id},
+        )
+        old_order_row = old_result.fetchone()
+
+        if old_order_row is None:
+            raise AppError(
+                code=6002, message="Old order not found", http_status=404
+            )
+
+        if str(old_order_row.user_id) != str(user_id):
+            raise AppError(
+                code=6004, message="Old order not owned by requesting user", http_status=403
+            )
+
+        if old_order_row.status == "FILLED":
+            raise AppError(
+                code=6003, message="Old order already fully filled", http_status=422
+            )
+
+        if old_order_row.filled_quantity > 0:
+            # Partially filled: cancel remainder, reject replacement
+            await self._cancel_order_by_row(old_order_row, db)
+            raise AppError(
+                code=6001,
+                message="Old order partially filled; remainder cancelled, replacement rejected",
+                http_status=422,
+            )
+
+        # Step 2: Validate market_id consistency
+        if str(old_order_row.market_id) != str(new_order_params.market_id):
+            raise AppError(
+                code=6005,
+                message="New order market_id must match old order market_id",
+                http_status=422,
+            )
+
+        market_id = str(old_order_row.market_id)
+
+        # Step 3: Atomic replace within market lock
+        async with self._market_locks[market_id]:
+            # Cancel old order (remove from book + unfreeze + DB update)
+            await self._cancel_order_by_row(old_order_row, db)
+
+            # Build new Order domain object
+            from src.pm_order.domain.models import Order
+            from src.pm_order.infrastructure.persistence import OrderRepository
+            from src.pm_common.id_generator import generate_id
+            from src.pm_common.datetime_utils import utc_now
+
+            repo = OrderRepository()
+            new_order = Order(
+                id=generate_id(),
+                client_order_id=new_order_params.client_order_id,
+                market_id=new_order_params.market_id,
+                user_id=user_id,
+                original_side=new_order_params.side,
+                original_direction=new_order_params.direction,
+                original_price=new_order_params.price_cents,
+                book_type="",
+                book_direction="",
+                book_price=0,
+                quantity=new_order_params.quantity,
+                time_in_force=new_order_params.time_in_force,
+                status="OPEN",
+                created_at=utc_now(),
+                updated_at=utc_now(),
+            )
+
+            placed_order, trades, _ = await self._place_order_inner(new_order, repo, db)
+
+        return {
+            "old_order_id": old_order_id,
+            "old_order_status": "CANCELLED",
+            "old_order_filled_quantity": 0,
+            "old_order_original_quantity": old_order_row.quantity,
+            "new_order": {
+                "id": placed_order.id,
+                "status": placed_order.status,
+                "filled_quantity": placed_order.filled_quantity,
+                "remaining_quantity": placed_order.remaining_quantity,
+            },
+            "trades": [
+                {
+                    "buy_order_id": t.buy_order_id,
+                    "sell_order_id": t.sell_order_id,
+                    "price": t.price,
+                    "quantity": t.quantity,
+                }
+                for t in trades
+            ],
+        }
+
+    async def batch_cancel(
+        self, market_id: str, user_id: str, cancel_scope: str, db: AsyncSession
+    ) -> dict:
+        """Batch cancel all AMM orders in a market.
+
+        See interface contract v1.4 §3.2.
+        cancel_scope is applied to original_direction:
+        - ALL: cancel all OPEN/PARTIALLY_FILLED orders
+        - BUY_ONLY: cancel only BUY original_direction orders
+        - SELL_ONLY: cancel only SELL original_direction orders
+        """
+        # Build direction filter (safe: only hardcoded strings, validated by Pydantic)
+        direction_clause = ""
+        if cancel_scope == "BUY_ONLY":
+            direction_clause = "AND original_direction = 'BUY'"
+        elif cancel_scope == "SELL_ONLY":
+            direction_clause = "AND original_direction = 'SELL'"
+
+        params: dict[str, Any] = {"uid": user_id, "mid": market_id}
+
+        result = await db.execute(
+            text(
+                "SELECT id, frozen_amount, frozen_asset_type, original_direction,"
+                " user_id, market_id"
+                " FROM orders"
+                " WHERE user_id = :uid AND market_id = :mid"
+                " AND status IN ('OPEN', 'PARTIALLY_FILLED')"
+                f" {direction_clause}"
+                " FOR UPDATE"
+            ),
+            params,
+        )
+        orders = result.fetchall()
+
+        if not orders:
+            return {
+                "market_id": market_id,
+                "cancelled_count": 0,
+                "total_unfrozen_funds_cents": 0,
+                "total_unfrozen_yes_shares": 0,
+                "total_unfrozen_no_shares": 0,
+            }
+
+        total_funds = 0
+        total_yes = 0
+        total_no = 0
+
+        # Update in-memory orderbook under market lock
+        async with self._market_locks[market_id]:
+            ob = self._get_or_create_orderbook(market_id)
+            for order in orders:
+                ob.cancel_order(str(order.id))
+
+        # Accumulate unfrozen amounts
+        for order in orders:
+            asset_type = str(order.frozen_asset_type)
+            if asset_type == "FUNDS":
+                total_funds += order.frozen_amount
+            elif asset_type == "YES_SHARES":
+                total_yes += order.frozen_amount
+            else:  # NO_SHARES
+                total_no += order.frozen_amount
+
+        # Bulk update order statuses
+        order_ids = [str(o.id) for o in orders]
+        await db.execute(
+            text(
+                "UPDATE orders SET status = 'CANCELLED', updated_at = NOW()"
+                " WHERE id = ANY(:ids)"
+            ),
+            {"ids": order_ids},
+        )
+
+        # Bulk unfreeze funds
+        if total_funds > 0:
+            await db.execute(
+                text(
+                    "UPDATE accounts SET"
+                    " available_balance = available_balance + :amt,"
+                    " frozen_balance = frozen_balance - :amt,"
+                    " version = version + 1"
+                    " WHERE user_id = :uid"
+                ),
+                {"amt": total_funds, "uid": user_id},
+            )
+
+        # Bulk unfreeze YES shares
+        if total_yes > 0:
+            await db.execute(
+                text(
+                    "UPDATE positions SET yes_pending_sell = yes_pending_sell - :amt"
+                    " WHERE user_id = :uid AND market_id = :mid"
+                ),
+                {"amt": total_yes, "uid": user_id, "mid": market_id},
+            )
+
+        # Bulk unfreeze NO shares
+        if total_no > 0:
+            await db.execute(
+                text(
+                    "UPDATE positions SET no_pending_sell = no_pending_sell - :amt"
+                    " WHERE user_id = :uid AND market_id = :mid"
+                ),
+                {"amt": total_no, "uid": user_id, "mid": market_id},
+            )
+
+        return {
+            "market_id": market_id,
+            "cancelled_count": len(orders),
+            "total_unfrozen_funds_cents": total_funds,
+            "total_unfrozen_yes_shares": total_yes,
+            "total_unfrozen_no_shares": total_no,
+        }
+
     async def cancel_order(
         self, order_id: str, user_id: str, repo: OrderRepositoryProtocol, db: AsyncSession
     ) -> Order:
