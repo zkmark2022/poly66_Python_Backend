@@ -13,6 +13,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.pm_account.domain.constants import AMM_USER_ID
 from src.pm_common.database import get_db_session
 from src.pm_common.errors import AccountDisabledError, InvalidCredentialsError
 from src.pm_gateway.auth.jwt_handler import decode_token
@@ -56,3 +57,18 @@ async def get_current_user(
         raise AccountDisabledError()
 
     return user
+
+
+async def require_amm_user(
+    current_user: UserModel = Depends(get_current_user),
+) -> UserModel:
+    """Restrict endpoint to the AMM system account only.
+
+    Raises HTTP 403 if the authenticated user is not the AMM system account.
+    """
+    if str(current_user.id) != AMM_USER_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AMM system account required",
+        )
+    return current_user
