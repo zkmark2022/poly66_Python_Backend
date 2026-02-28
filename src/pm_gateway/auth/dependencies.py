@@ -62,11 +62,15 @@ async def get_current_user(
 async def require_amm_user(
     current_user: UserModel = Depends(get_current_user),
 ) -> UserModel:
-    """Verify the caller is the AMM system account.
+    """Dependency that ensures the authenticated user is the AMM system account.
 
-    Raises HTTP 403 (AppError code 6099) if the user is not the AMM account.
-    Used to protect AMM-only privileged endpoints (mint/burn, atomic replace, etc.).
+    MVP: Uses standard JWT + user_id check.
+    Phase 1.5: Will check Service Token + account_type == SYSTEM_BOT.
     """
-    if current_user.id != AMM_USER_ID:
-        raise AppError(6099, "AMM system account required", 403)
+    if str(current_user.id) != AMM_USER_ID:
+        raise AppError(
+            code=6099,
+            message="This endpoint is restricted to AMM system account",
+            http_status=403,
+        )
     return current_user
