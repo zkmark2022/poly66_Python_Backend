@@ -465,6 +465,120 @@ class MatchingEngine:
             ],
         }
 
+    async def batch_cancel(
+        self, market_id: str, user_id: str, cancel_scope: str, db: AsyncSession
+    ) -> dict:
+        """Batch cancel all AMM orders in a market.
+
+        See interface contract v1.4 §3.2.
+        cancel_scope is applied to original_direction:
+        - ALL: cancel all OPEN/PARTIALLY_FILLED orders
+        - BUY_ONLY: cancel only BUY original_direction orders
+        - SELL_ONLY: cancel only SELL original_direction orders
+        """
+        # Build direction filter (safe: only hardcoded strings, validated by Pydantic)
+        direction_clause = ""
+        if cancel_scope == "BUY_ONLY":
+            direction_clause = "AND original_direction = 'BUY'"
+        elif cancel_scope == "SELL_ONLY":
+            direction_clause = "AND original_direction = 'SELL'"
+
+        params: dict[str, Any] = {"uid": user_id, "mid": market_id}
+
+        result = await db.execute(
+            text(
+                "SELECT id, frozen_amount, frozen_asset_type, original_direction,"
+                " user_id, market_id"
+                " FROM orders"
+                " WHERE user_id = :uid AND market_id = :mid"
+                " AND status IN ('OPEN', 'PARTIALLY_FILLED')"
+                f" {direction_clause}"
+                " FOR UPDATE"
+            ),
+            params,
+        )
+        orders = result.fetchall()
+
+        if not orders:
+            return {
+                "market_id": market_id,
+                "cancelled_count": 0,
+                "total_unfrozen_funds_cents": 0,
+                "total_unfrozen_yes_shares": 0,
+                "total_unfrozen_no_shares": 0,
+            }
+
+        total_funds = 0
+        total_yes = 0
+        total_no = 0
+
+        # Update in-memory orderbook under market lock
+        async with self._market_locks[market_id]:
+            ob = self._get_or_create_orderbook(market_id)
+            for order in orders:
+                ob.cancel_order(str(order.id))
+
+        # Accumulate unfrozen amounts
+        for order in orders:
+            asset_type = str(order.frozen_asset_type)
+            if asset_type == "FUNDS":
+                total_funds += order.frozen_amount
+            elif asset_type == "YES_SHARES":
+                total_yes += order.frozen_amount
+            else:  # NO_SHARES
+                total_no += order.frozen_amount
+
+        # Bulk update order statuses
+        order_ids = [str(o.id) for o in orders]
+        await db.execute(
+            text(
+                "UPDATE orders SET status = 'CANCELLED', updated_at = NOW()"
+                " WHERE id = ANY(:ids)"
+            ),
+            {"ids": order_ids},
+        )
+
+        # Bulk unfreeze funds
+        if total_funds > 0:
+            await db.execute(
+                text(
+                    "UPDATE accounts SET"
+                    " available_balance = available_balance + :amt,"
+                    " frozen_balance = frozen_balance - :amt,"
+                    " version = version + 1"
+                    " WHERE user_id = :uid"
+                ),
+                {"amt": total_funds, "uid": user_id},
+            )
+
+        # Bulk unfreeze YES shares
+        if total_yes > 0:
+            await db.execute(
+                text(
+                    "UPDATE positions SET yes_pending_sell = yes_pending_sell - :amt"
+                    " WHERE user_id = :uid AND market_id = :mid"
+                ),
+                {"amt": total_yes, "uid": user_id, "mid": market_id},
+            )
+
+        # Bulk unfreeze NO shares
+        if total_no > 0:
+            await db.execute(
+                text(
+                    "UPDATE positions SET no_pending_sell = no_pending_sell - :amt"
+                    " WHERE user_id = :uid AND market_id = :mid"
+                ),
+                {"amt": total_no, "uid": user_id, "mid": market_id},
+            )
+
+        return {
+            "market_id": market_id,
+            "cancelled_count": len(orders),
+            "total_unfrozen_funds_cents": total_funds,
+            "total_unfrozen_yes_shares": total_yes,
+            "total_unfrozen_no_shares": total_no,
+        }
+
     async def cancel_order(
         self, order_id: str, user_id: str, repo: OrderRepositoryProtocol, db: AsyncSession
     ) -> Order:
