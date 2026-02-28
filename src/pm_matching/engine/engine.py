@@ -328,6 +328,229 @@ class MatchingEngine:
                 self._orderbooks.pop(order.market_id, None)
                 raise
 
+    async def replace_order(
+        self,
+        old_order_id: str,
+        new_order_params: Any,
+        user_id: str,
+        repo: OrderRepositoryProtocol,
+        db: AsyncSession,
+    ) -> dict:
+        """Atomic Replace: cancel old order + place new order in a single transaction.
+
+        See interface contract v1.4 §3.1.
+
+        Error codes:
+        - 6002: old order not found
+        - 6004: old order not owned by user_id
+        - 6003: old order already fully filled
+        - 6001: old order partially filled (replacement rejected)
+        - 6005: new order market_id != old order market_id
+        """
+        from src.pm_common.datetime_utils import utc_now
+        from src.pm_common.id_generator import generate_id
+
+        # Step 1: Load and validate old order (outside lock)
+        old_order = await repo.get_by_id(old_order_id, db)
+        if old_order is None:
+            raise AppError(6002, "Old order not found", http_status=404)
+        if str(old_order.user_id) != str(user_id):
+            raise AppError(6004, "Old order not owned by requesting user", http_status=403)
+        if old_order.status == "FILLED":
+            raise AppError(6003, "Old order already fully filled", http_status=422)
+        if old_order.filled_quantity > 0:
+            raise AppError(
+                6001,
+                "Old order partially filled; replacement rejected. Cancel the old order first.",
+                http_status=422,
+            )
+        if str(old_order.market_id) != str(new_order_params.market_id):
+            raise AppError(
+                6005,
+                "New order market_id must match old order market_id",
+                http_status=422,
+            )
+
+        market_id = str(old_order.market_id)
+
+        # Step 2: Atomic cancel + place under market lock
+        lock = self._get_or_create_lock(market_id)
+        async with lock:
+            try:
+                async with db.begin_nested():
+                    # Cancel old order inline (no re-lock)
+                    ob = self._get_or_create_orderbook(market_id)
+                    ob.cancel_order(old_order_id)
+                    await self._unfreeze_remainder(old_order, db)
+                    old_order.status = "CANCELLED"
+                    await repo.update_status(old_order, db)
+                    await write_wal_event(
+                        "ORDER_CANCELLED",
+                        old_order.id,
+                        market_id,
+                        user_id,
+                        {"replace_reason": "atomic_replace"},
+                        db,
+                    )
+
+                    # Place new order inline (no re-lock via _place_order_inner)
+                    new_order = Order(
+                        id=generate_id(),
+                        client_order_id=new_order_params.client_order_id,
+                        market_id=new_order_params.market_id,
+                        user_id=user_id,
+                        original_side=new_order_params.side,
+                        original_direction=new_order_params.direction,
+                        original_price=new_order_params.price_cents,
+                        book_type="",
+                        book_direction="",
+                        book_price=0,
+                        quantity=new_order_params.quantity,
+                        time_in_force=new_order_params.time_in_force,
+                        status="OPEN",
+                        created_at=utc_now(),
+                        updated_at=utc_now(),
+                    )
+                    new_order, trades, netting_qty = await self._place_order_inner(
+                        new_order, repo, db
+                    )
+
+            except AppError:
+                raise
+            except Exception:
+                self._orderbooks.pop(market_id, None)
+                raise
+
+        return {
+            "old_order_id": old_order_id,
+            "old_order_status": "CANCELLED",
+            "old_order_filled_quantity": old_order.filled_quantity,
+            "old_order_original_quantity": old_order.quantity,
+            "new_order": {
+                "id": new_order.id,
+                "client_order_id": new_order.client_order_id,
+                "status": new_order.status,
+                "quantity": new_order.quantity,
+                "filled_quantity": new_order.filled_quantity,
+                "remaining_quantity": new_order.remaining_quantity,
+            },
+            "trades": [
+                {
+                    "buy_order_id": t.buy_order_id,
+                    "sell_order_id": t.sell_order_id,
+                    "price": t.price,
+                    "quantity": t.quantity,
+                }
+                for t in trades
+            ],
+        }
+
+    async def batch_cancel(
+        self,
+        market_id: str,
+        user_id: str,
+        cancel_scope: str,
+        db: AsyncSession,
+    ) -> dict:
+        """Batch cancel all AMM orders in a market.
+
+        See interface contract v1.4 §3.2.
+        cancel_scope: ALL | BUY_ONLY | SELL_ONLY (based on original_direction).
+        """
+        from sqlalchemy import text as sql_text
+
+        direction_filter = ""
+        if cancel_scope == "BUY_ONLY":
+            direction_filter = "AND original_direction = 'BUY'"
+        elif cancel_scope == "SELL_ONLY":
+            direction_filter = "AND original_direction = 'SELL'"
+
+        result = await db.execute(
+            sql_text(
+                f"SELECT id, frozen_amount, frozen_asset_type, original_direction "  # noqa: S608
+                f"FROM orders "
+                f"WHERE user_id = :uid AND market_id = :mid "
+                f"AND status IN ('OPEN', 'PARTIALLY_FILLED') "
+                f"{direction_filter} "
+                f"FOR UPDATE"
+            ),
+            {"uid": user_id, "mid": market_id},
+        )
+        orders = result.fetchall()
+
+        if not orders:
+            return {
+                "market_id": market_id,
+                "cancelled_count": 0,
+                "total_unfrozen_funds_cents": 0,
+                "total_unfrozen_yes_shares": 0,
+                "total_unfrozen_no_shares": 0,
+            }
+
+        total_funds = 0
+        total_yes = 0
+        total_no = 0
+
+        lock = self._get_or_create_lock(market_id)
+        async with lock:
+            ob = self._orderbooks.get(market_id)
+            for order in orders:
+                if ob:
+                    ob.cancel_order(order.id)
+                if order.frozen_asset_type == "FUNDS":
+                    total_funds += order.frozen_amount
+                elif order.frozen_asset_type == "YES_SHARES":
+                    total_yes += order.frozen_amount
+                elif order.frozen_asset_type == "NO_SHARES":
+                    total_no += order.frozen_amount
+
+            # Bulk cancel in DB
+            order_ids = [o.id for o in orders]
+            await db.execute(
+                sql_text(
+                    "UPDATE orders SET status = 'CANCELLED', updated_at = NOW() "
+                    "WHERE id = ANY(:ids)"
+                ),
+                {"ids": order_ids},
+            )
+
+            # Bulk unfreeze
+            if total_funds > 0:
+                await db.execute(
+                    sql_text(
+                        "UPDATE accounts SET "
+                        "available_balance = available_balance + :amt, "
+                        "frozen_balance = frozen_balance - :amt, "
+                        "version = version + 1 "
+                        "WHERE user_id = :uid"
+                    ),
+                    {"amt": total_funds, "uid": user_id},
+                )
+            if total_yes > 0:
+                await db.execute(
+                    sql_text(
+                        "UPDATE positions SET yes_pending_sell = yes_pending_sell - :amt "
+                        "WHERE user_id = :uid AND market_id = :mid"
+                    ),
+                    {"amt": total_yes, "uid": user_id, "mid": market_id},
+                )
+            if total_no > 0:
+                await db.execute(
+                    sql_text(
+                        "UPDATE positions SET no_pending_sell = no_pending_sell - :amt "
+                        "WHERE user_id = :uid AND market_id = :mid"
+                    ),
+                    {"amt": total_no, "uid": user_id, "mid": market_id},
+                )
+
+        return {
+            "market_id": market_id,
+            "cancelled_count": len(orders),
+            "total_unfrozen_funds_cents": total_funds,
+            "total_unfrozen_yes_shares": total_yes,
+            "total_unfrozen_no_shares": total_no,
+        }
+
 
 async def _update_maker_status(
     tr: TradeResult, repo: OrderRepositoryProtocol, db: AsyncSession
