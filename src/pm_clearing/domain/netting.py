@@ -31,10 +31,10 @@ _CREDIT_AVAILABLE_SQL = text("""
 """)
 
 
-async def execute_netting_if_needed(
+async def _do_netting(
     user_id: str, market_id: str, market: object, db: AsyncSession
 ) -> int:
-    """Auto-net YES+NO positions. Returns qty netted (0 if nothing to net)."""
+    """Core netting logic. Returns qty netted (0 if nothing to net)."""
     row = (
         await db.execute(_GET_POSITION_SQL, {"user_id": user_id, "market_id": market_id})
     ).fetchone()
@@ -73,3 +73,24 @@ async def execute_netting_if_needed(
     market.pnl_pool -= refund - total_cost_released  # type: ignore[attr-defined]
 
     return nettable
+
+
+async def execute_netting_if_needed(
+    user_id: str, market_id: str, market: object, db: AsyncSession
+) -> int:
+    """Execute auto-netting if user has it enabled.
+
+    AMM system account has auto_netting_enabled=false to preserve
+    dual-sided inventory. See data dictionary v1.3 §3.3.
+    """
+    # --- AMM prerequisite: check auto_netting_enabled ---
+    netting_check = await db.execute(
+        text("SELECT auto_netting_enabled FROM accounts WHERE user_id = :uid"),
+        {"uid": user_id},
+    )
+    auto_netting = netting_check.scalar()
+    if auto_netting is False:  # explicit False, not None
+        return 0  # skip netting for this user
+    # --- end AMM prerequisite ---
+
+    return await _do_netting(user_id, market_id, market, db)
