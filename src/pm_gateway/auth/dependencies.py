@@ -66,11 +66,13 @@ async def require_amm_user(
 
     MVP: Uses standard JWT + user_id check.
     Phase 1.5: Will check Service Token + account_type == SYSTEM_BOT.
+
+    Raises AppError 6099 (HTTP 403) if the caller is not the AMM system account.
     """
     if str(current_user.id) != AMM_USER_ID:
         raise AppError(
-            code=6099,
-            message="This endpoint is restricted to AMM system account",
+            6099,
+            "This endpoint is restricted to AMM system account",
             http_status=403,
         )
     return current_user

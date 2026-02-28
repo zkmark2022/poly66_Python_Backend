@@ -21,7 +21,7 @@ from config.settings import settings
 from src.pm_account.api.positions_router import router as positions_router
 from src.pm_account.api.router import router as account_router
 from src.pm_admin.api.router import router as admin_router
-from src.pm_clearing.api.amm_router import router as amm_router
+from src.pm_clearing.api.amm_router import router as amm_clearing_router
 from src.pm_clearing.api.trades_router import router as trades_router
 from src.pm_common.database import engine
 from src.pm_common.errors import AppError
@@ -30,6 +30,7 @@ from src.pm_common.response import error_response
 from src.pm_gateway.api.router import router as auth_router
 from src.pm_gateway.middleware.request_log import RequestLogMiddleware
 from src.pm_market.api.router import router as market_router
+from src.pm_order.api.amm_router import router as amm_order_router
 from src.pm_order.api.router import router as order_router
 
 
@@ -77,9 +78,10 @@ app.include_router(account_router, prefix="/api/v1")
 app.include_router(positions_router, prefix="/api/v1")
 app.include_router(market_router, prefix="/api/v1")
 app.include_router(order_router, prefix="/api/v1")
-app.include_router(amm_router, prefix="/api/v1")
 app.include_router(trades_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
+app.include_router(amm_clearing_router, prefix="/api/v1/amm")
+app.include_router(amm_order_router, prefix="/api/v1/amm/orders")
 
 
 @app.get("/health")

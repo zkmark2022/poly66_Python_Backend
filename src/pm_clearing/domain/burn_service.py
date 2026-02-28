@@ -7,13 +7,12 @@ Aligned with interface contract v1.4 §3.4:
 - Reduces market reserve_balance
 - Credits AMM account available_balance
 - Writes ledger entries (BURN_REVENUE + BURN_RESERVE_OUT)
+- Writes audit trade record (scenario=BURN)
 - Idempotent via idempotency_key
-
-Schema notes:
-- ledger_entries.id is BIGSERIAL — do NOT specify id
-- ledger_entries columns: amount (not amount_cents), balance_after (NOT NULL)
 """
 import logging
+import uuid
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,17 +30,12 @@ async def execute_privileged_burn(
     idempotency_key: str,
     db: AsyncSession,
 ) -> dict:
-    """Execute privileged burn within the caller's transaction.
-
-    Returns dict with burn result data.
-    Raises AppError on validation failure.
-    """
+    """Execute privileged burn within the caller's transaction."""
     # Step 1: Idempotency check
     existing = await db.execute(
         text(
-            "SELECT amount, reference_id FROM ledger_entries "
-            "WHERE reference_type = 'AMM_BURN' AND reference_id = :key "
-            "LIMIT 1"
+            "SELECT amount_cents, reference_id FROM ledger_entries "
+            "WHERE reference_type = 'AMM_BURN' AND reference_id = :key"
         ),
         {"key": idempotency_key},
     )
@@ -56,11 +50,11 @@ async def execute_privileged_burn(
     )
     market_row = market_result.fetchone()
     if market_row is None:
-        raise AppError(code=3001, message="Market not found", http_status=404)
+        raise AppError(3001, "Market not found", http_status=404)
     if market_row.status != "ACTIVE":
-        raise AppError(code=3002, message="Market is not active", http_status=422)
+        raise AppError(3002, "Market is not active", http_status=422)
 
-    # Step 3: Validate positions (available = volume - pending_sell, FOR UPDATE row lock)
+    # Step 3: Validate positions (available = volume - pending_sell)
     pos_result = await db.execute(
         text(
             "SELECT yes_volume, no_volume, yes_pending_sell, no_pending_sell, "
@@ -71,7 +65,7 @@ async def execute_privileged_burn(
     )
     pos_row = pos_result.fetchone()
     if pos_row is None:
-        raise AppError(code=5001, message="No positions found", http_status=422)
+        raise AppError(5001, "No positions found", http_status=422)
 
     yes_available = pos_row.yes_volume - pos_row.yes_pending_sell
     no_available = pos_row.no_volume - pos_row.no_pending_sell
@@ -79,13 +73,12 @@ async def execute_privileged_burn(
 
     if quantity > max_burnable:
         raise AppError(
-            code=5001,
-            message=f"Insufficient available shares: can burn max {max_burnable}, "
-            f"requested {quantity}",
+            5001,
+            f"Insufficient available shares: can burn max {max_burnable}, requested {quantity}",
             http_status=422,
         )
 
-    # Step 4: Deduct positions + release cost_sum (weighted average)
+    # Step 4: Calculate cost releases (weighted average)
     yes_cost_release = (
         (pos_row.yes_cost_sum * quantity) // pos_row.yes_volume
         if pos_row.yes_volume > 0
@@ -97,6 +90,7 @@ async def execute_privileged_burn(
         else 0
     )
 
+    # Step 5: Deduct positions
     await db.execute(
         text(
             "UPDATE positions SET "
@@ -115,17 +109,14 @@ async def execute_privileged_burn(
         },
     )
 
-    # Step 5: Reduce market reserve
+    # Step 6: Reduce market reserve and credit AMM account
     recovery_cents = quantity * RECOVERY_PER_SHARE_CENTS
     await db.execute(
         text(
-            "UPDATE markets SET reserve_balance = reserve_balance - :amount "
-            "WHERE id = :mid"
+            "UPDATE markets SET reserve_balance = reserve_balance - :amount WHERE id = :mid"
         ),
         {"amount": recovery_cents, "mid": market_id},
     )
-
-    # Step 6: Credit AMM account
     await db.execute(
         text(
             "UPDATE accounts SET available_balance = available_balance + :amount, "
@@ -134,41 +125,52 @@ async def execute_privileged_burn(
         {"amount": recovery_cents, "uid": user_id},
     )
 
-    # Step 7: Write ledger entries (no `id` — BIGSERIAL auto-generates)
-    # Read current balance for balance_after calculation
-    bal_before_result = await db.execute(
-        text("SELECT available_balance FROM accounts WHERE user_id = :uid"),
-        {"uid": user_id},
-    )
-    bal_before_row = bal_before_result.fetchone()
-    current_balance = bal_before_row.available_balance if bal_before_row else recovery_cents
-
+    # Step 7: Write ledger entries
     await db.execute(
         text(
             "INSERT INTO ledger_entries "
-            "(user_id, entry_type, amount, balance_after, reference_type, reference_id) "
-            "VALUES (:uid, 'BURN_REVENUE', :amount, :balance_after, 'AMM_BURN', :ref)"
+            "(id, user_id, entry_type, amount_cents, reference_type, reference_id, created_at) "
+            "VALUES (:id, :uid, 'BURN_REVENUE', :amount, 'AMM_BURN', :ref, NOW())"
         ),
         {
+            "id": str(uuid.uuid4()),
             "uid": user_id,
             "amount": recovery_cents,
-            "balance_after": current_balance,
             "ref": idempotency_key,
         },
     )
     await db.execute(
         text(
             "INSERT INTO ledger_entries "
-            "(user_id, entry_type, amount, balance_after, reference_type, reference_id) "
-            "VALUES ('SYSTEM', 'BURN_RESERVE_OUT', :amount, 0, 'AMM_BURN', :ref)"
+            "(id, user_id, entry_type, amount_cents, reference_type, reference_id, created_at) "
+            "VALUES (:id, :uid, 'BURN_RESERVE_OUT', :amount, 'AMM_BURN', :ref, NOW())"
         ),
         {
+            "id": str(uuid.uuid4()),
+            "uid": "SYSTEM",
             "amount": -recovery_cents,
             "ref": idempotency_key,
         },
     )
 
-    # Read updated state for response
+    # Step 8: Audit trade record
+    await db.execute(
+        text(
+            "INSERT INTO trades "
+            "(id, market_id, buy_order_id, sell_order_id, buy_user_id, sell_user_id, "
+            "scenario, price_cents, quantity, maker_fee, taker_fee, created_at) "
+            "VALUES (:id, :mid, :id, :id, 'SYSTEM', :seller, "
+            "'BURN', 50, :qty, 0, 0, NOW())"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "mid": market_id,
+            "seller": user_id,
+            "qty": quantity,
+        },
+    )
+
+    # Step 9: Read updated state for response
     pos_final = await db.execute(
         text(
             "SELECT yes_volume, no_volume FROM positions "
@@ -178,11 +180,17 @@ async def execute_privileged_burn(
     )
     pos_f = pos_final.fetchone()
 
+    bal_final = await db.execute(
+        text("SELECT available_balance FROM accounts WHERE user_id = :uid"),
+        {"uid": user_id},
+    )
+    bal_f = bal_final.fetchone()
+
     return {
         "market_id": market_id,
         "burned_quantity": quantity,
         "recovered_cents": recovery_cents,
         "new_yes_inventory": pos_f.yes_volume if pos_f else 0,
         "new_no_inventory": pos_f.no_volume if pos_f else 0,
-        "remaining_balance_cents": current_balance,
+        "remaining_balance_cents": bal_f.available_balance if bal_f else 0,
     }

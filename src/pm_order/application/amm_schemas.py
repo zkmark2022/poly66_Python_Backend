@@ -1,6 +1,6 @@
-# src/pm_order/application/amm_schemas.py
-"""AMM-specific schemas for Atomic Replace and Batch Cancel."""
+"""AMM-specific schemas for Atomic Replace and Batch Cancel APIs."""
 from pydantic import BaseModel, Field
+
 from src.pm_order.application.schemas import PlaceOrderRequest
 
 
@@ -16,15 +16,6 @@ class ReplaceResponse(BaseModel):
     old_order_original_quantity: int
     new_order: dict
     trades: list[dict]
-
-
-class PartialFillRejection(BaseModel):
-    old_order_id: str
-    old_order_status: str
-    filled_quantity: int
-    remaining_quantity_cancelled: int
-    unfrozen_amount: int
-    unfrozen_asset_type: str
 
 
 class BatchCancelRequest(BaseModel):
