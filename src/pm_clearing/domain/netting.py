@@ -3,6 +3,7 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.pm_account.domain.constants import AMM_USER_ID
 from src.pm_clearing.domain.fee import calc_released_cost
 
 _GET_POSITION_SQL = text("""
@@ -34,7 +35,13 @@ _CREDIT_AVAILABLE_SQL = text("""
 async def execute_netting_if_needed(
     user_id: str, market_id: str, market: object, db: AsyncSession
 ) -> int:
-    """Auto-net YES+NO positions. Returns qty netted (0 if nothing to net)."""
+    """Auto-net YES+NO positions. Returns qty netted (0 if nothing to net).
+
+    AMM bypass: AMM system account holds dual inventory intentionally — skip netting.
+    """
+    if user_id == AMM_USER_ID:
+        return 0
+
     row = (
         await db.execute(_GET_POSITION_SQL, {"user_id": user_id, "market_id": market_id})
     ).fetchone()
