@@ -86,10 +86,12 @@ async def clear_burn(
             "cost_released": yes_cost_rel,
         },
     )
-    await db.execute(
+    yes_result = await db.execute(
         _ADD_BALANCE_SQL,
         {"user_id": trade.sell_user_id, "amount": yes_proceeds},
     )
+    if yes_result.rowcount == 0:
+        raise RuntimeError(f"Account not found for YES seller: {trade.sell_user_id}")
 
     # Release NO side
     await db.execute(
@@ -101,10 +103,12 @@ async def clear_burn(
             "cost_released": no_cost_rel,
         },
     )
-    await db.execute(
+    no_result = await db.execute(
         _ADD_BALANCE_SQL,
         {"user_id": trade.buy_user_id, "amount": no_proceeds},
     )
+    if no_result.rowcount == 0:
+        raise RuntimeError(f"Account not found for NO seller: {trade.buy_user_id}")
 
     # Market: contract pair destroyed
     market.reserve_balance -= payout_per_share * trade.quantity  # type: ignore[attr-defined]

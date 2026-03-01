@@ -70,6 +70,8 @@ async def _do_netting(
     await db.execute(_CREDIT_AVAILABLE_SQL, {"user_id": user_id, "amount": refund})
 
     market.reserve_balance -= refund  # type: ignore[attr-defined]
+    market.total_yes_shares -= nettable  # type: ignore[attr-defined]
+    market.total_no_shares -= nettable  # type: ignore[attr-defined]
     market.pnl_pool -= refund - total_cost_released  # type: ignore[attr-defined]
 
     return nettable
