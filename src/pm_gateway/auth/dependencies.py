@@ -8,6 +8,8 @@ Usage in any protected router:
         ...
 """
 
+from uuid import UUID
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
@@ -15,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.pm_account.domain.constants import AMM_USER_ID
 from src.pm_common.database import get_db_session
-from src.pm_common.errors import AccountDisabledError, AppError, InvalidCredentialsError
+from src.pm_common.errors import AccountDisabledError, InvalidCredentialsError
 from src.pm_gateway.auth.jwt_handler import decode_token
 from src.pm_gateway.user.db_models import UserModel
 
@@ -48,7 +50,15 @@ async def get_current_user(
     if not user_id:
         raise _CREDENTIALS_EXCEPTION
 
-    result = await db.execute(select(UserModel).where(UserModel.id == user_id))
+    # Explicit conversion to UUID so the SQLAlchemy UUID(as_uuid=True) column
+    # receives the correct Python type, regardless of whether the caller passed
+    # a raw string or a UUID object serialised via str().
+    try:
+        user_uuid = UUID(user_id)
+    except ValueError:
+        raise _CREDENTIALS_EXCEPTION from None
+
+    result = await db.execute(select(UserModel).where(UserModel.id == user_uuid))
     user = result.scalar_one_or_none()
     if user is None:
         raise _CREDENTIALS_EXCEPTION
@@ -62,11 +72,13 @@ async def get_current_user(
 async def require_amm_user(
     current_user: UserModel = Depends(get_current_user),
 ) -> UserModel:
-    """Verify the caller is the AMM system account.
+    """Restrict endpoint to the AMM system account only.
 
-    Raises HTTP 403 (AppError code 6099) if the user is not the AMM account.
-    Used to protect AMM-only privileged endpoints (mint/burn, atomic replace, etc.).
+    Raises HTTP 403 if the authenticated user is not the AMM system account.
     """
-    if current_user.id != AMM_USER_ID:
-        raise AppError(6099, "AMM system account required", 403)
+    if str(current_user.id) != AMM_USER_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AMM system account required",
+        )
     return current_user
