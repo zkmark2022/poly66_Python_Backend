@@ -7,7 +7,7 @@ DO NOT add/remove columns here without a corresponding migration.
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +22,9 @@ class AccountORM(Base):
     available_balance: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     frozen_balance: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    auto_netting_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
