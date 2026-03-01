@@ -13,8 +13,9 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.pm_account.domain.constants import AMM_USER_ID
 from src.pm_common.database import get_db_session
-from src.pm_common.errors import AccountDisabledError, InvalidCredentialsError
+from src.pm_common.errors import AccountDisabledError, AppError, InvalidCredentialsError
 from src.pm_gateway.auth.jwt_handler import decode_token
 from src.pm_gateway.user.db_models import UserModel
 
@@ -56,3 +57,16 @@ async def get_current_user(
         raise AccountDisabledError()
 
     return user
+
+
+async def require_amm_user(
+    current_user: UserModel = Depends(get_current_user),
+) -> UserModel:
+    """Verify the caller is the AMM system account.
+
+    Raises HTTP 403 (AppError code 6099) if the user is not the AMM account.
+    Used to protect AMM-only privileged endpoints (mint/burn, atomic replace, etc.).
+    """
+    if current_user.id != AMM_USER_ID:
+        raise AppError(6099, "AMM system account required", 403)
+    return current_user
