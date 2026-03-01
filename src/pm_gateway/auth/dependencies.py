@@ -8,6 +8,8 @@ Usage in any protected router:
         ...
 """
 
+from uuid import UUID
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
@@ -47,7 +49,15 @@ async def get_current_user(
     if not user_id:
         raise _CREDENTIALS_EXCEPTION
 
-    result = await db.execute(select(UserModel).where(UserModel.id == user_id))
+    # Explicit conversion to UUID so the SQLAlchemy UUID(as_uuid=True) column
+    # receives the correct Python type, regardless of whether the caller passed
+    # a raw string or a UUID object serialised via str().
+    try:
+        user_uuid = UUID(user_id)
+    except ValueError:
+        raise _CREDENTIALS_EXCEPTION from None
+
+    result = await db.execute(select(UserModel).where(UserModel.id == user_uuid))
     user = result.scalar_one_or_none()
     if user is None:
         raise _CREDENTIALS_EXCEPTION
